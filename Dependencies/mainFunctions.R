@@ -602,7 +602,6 @@ processLayers <- function(rasterLayers,occurrenceRecords,regionBuffer,minDepth,m
     
   }
 
-  
   if( ! is.null(regionBufferPoly)  ) { 
     
     regionBufferPoly.shp <- shapefile(regionBufferPoly)
@@ -631,7 +630,6 @@ processLayers <- function(rasterLayers,occurrenceRecords,regionBuffer,minDepth,m
     rasters <- mask(rasters,regionBufferPoly.shp)
     
   }
-  
   
   ## -----------------------
   
@@ -663,17 +661,32 @@ processLayers <- function(rasterLayers,occurrenceRecords,regionBuffer,minDepth,m
     if( is.null(minDepth) ) { minDepth <- 0 }
     if( is.null(maxDepth) ) { maxDepth <- 99999 }
     
-    minDepth <- minDepth * (-1)
-    maxDepth <- maxDepth * (-1)
-    
-    rclmat <- data.frame(from=c(-99999,maxDepth,minDepth),to=c(maxDepth,minDepth,0),value=c(NA,1,NA))
-    rclmat <- rclmat[rclmat$from != rclmat$to,]
-    
-    bathymetry <- raster(bathymetryDataLayer)
-    bathymetry <- crop(bathymetry, rasters)
-    bathymetry <- reclassify(bathymetry, as.matrix(rclmat))
-    rastersBathymetryID <- Which( is.na(bathymetry), cells=TRUE)
-    
+    if( length(bathymetryDataLayer) > 1) {
+      minDepthRaster <- raster(bathymetryDataLayer[grepl("Min",bathymetryDataLayer)])
+      maxDepthRaster <- raster(bathymetryDataLayer[grepl("Max",bathymetryDataLayer)])
+      range <- c(minDepth, maxDepth) * (-1)
+      shapeRaster <- minDepthRaster <= max(range) & maxDepthRaster >= min(range)
+      bathymetry <- crop(shapeRaster, rasters)
+      bathymetry <- mask(bathymetry, subset(rasters,1))
+      bathymetry[bathymetry == 0] <- NA
+      rastersBathymetryID <- Which( is.na(bathymetry), cells=TRUE)
+      
+    }
+
+    if( length(bathymetryDataLayer) == 1) {
+      
+      minDepth <- minDepth * (-1)
+      maxDepth <- maxDepth * (-1)
+      
+      rclmat <- data.frame(from=c(-99999,maxDepth,minDepth),to=c(maxDepth,minDepth,0),value=c(NA,1,NA))
+      rclmat <- rclmat[rclmat$from != rclmat$to,]
+      bathymetry <- raster(bathymetryDataLayer[1])
+      bathymetry <- crop(bathymetry, rasters)
+      bathymetry <- reclassify(bathymetry, as.matrix(rclmat))
+      rastersBathymetryID <- Which( is.na(bathymetry), cells=TRUE)
+
+    }
+   
   }
   
   ## -----------------------
@@ -682,7 +695,6 @@ processLayers <- function(rasterLayers,occurrenceRecords,regionBuffer,minDepth,m
   rasters[rastersID] <- NA
   
   if(class(rasters) == "RasterBrick") { rasters <- stack(rasters)}
-  
   return(rasters)
   
 }

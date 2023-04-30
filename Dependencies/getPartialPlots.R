@@ -1,5 +1,6 @@
 
 summaryModel <- relativeContributionDF
+summaryModel <- summaryModel[sort(summaryModel$relImportance, index.return=T, decreasing = T)$ix,]
 varsToPlot <- as.character(summaryModel[summaryModel$relImportance >= reduceModelcomplexityThreshold,1])
 varsToPlot.n <- 0
 varsToPlotComposite <- character(0)

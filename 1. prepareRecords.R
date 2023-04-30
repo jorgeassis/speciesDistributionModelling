@@ -93,7 +93,10 @@ dev.off()
 
 # --------------------------
 
-occurrenceRecordsDepths <- data.frame(Depth=abs( raster::extract(raster(bathymetryDataLayer),occurrenceRecords) ))
+if( length(bathymetryDataLayer) == 1 ) { bathymetry <- raster(bathymetryDataLayer) }
+if( length(bathymetryDataLayer) >= 2 ) { bathymetry <- calc(stack(bathymetryDataLayer),mean) }
+
+occurrenceRecordsDepths <- data.frame(Depth=abs( raster::extract(bathymetry,occurrenceRecords) ))
 occurrenceRecordsDepthsPlot <- ggplot(occurrenceRecordsDepths, aes(x=Depth)) +
   geom_histogram(color="black", fill="#CACACA", bins=ifelse(nrow(occurrenceRecordsDepths) > 50,50,nrow(occurrenceRecordsDepths)), size=0.25) + 
   geom_vline(aes(xintercept=quantile(Depth,probs=0.95,na.rm=T)  ),color="Black", linetype="dashed", size=0.3) + 

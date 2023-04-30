@@ -38,7 +38,6 @@ for( modelType in algorithms ) {
   # Perform full model
   
   source("Dependencies/modelMe.R", local = TRUE)
-  
   save( model , file=paste0( resultsDirectory, "/Models/",modelType,".RData"))
 
   source("Dependencies/getContribution.R", local = TRUE)

@@ -4,7 +4,7 @@
 
 if( ! dir.exists(paste0(stackResultsFolder,"/Summary/")) ) { dir.create(paste0(stackResultsFolder,"/Summary/"), recursive = TRUE) }
 
-if(class(polygon) == "character") { polygon <- shapefile(polygon) }
+if(class(polygonPath) == "character") { polygon <- shapefile(polygonPath) }
 
 if( ! is.null(polygonFeature) ) { 
   
@@ -16,10 +16,7 @@ if( ! is.null(polygonFeature) ) {
 }
 
 for(scenario in scenariosToPredict ) {
-  
-  # rasterOptions(todisk = TRUE)
-  # rasterOptions(tmpdir=tempFolder)
-  
+
   sFiles <- list.files(mainResultsDirectory,pattern="RData",full.names = TRUE,recursive=TRUE)
   sFiles <- sFiles[unlist(sapply(speciesPredicted,function(x) { which(unlist(grepl(x,sFiles))) } ))]
   
@@ -49,7 +46,7 @@ for(scenario in scenariosToPredict ) {
   resMatrix <- matrix(0,nrow=nrow(polygon),ncol=length(sFiles))
   rownames(resMatrix) <- polygon$names
   colnames(resMatrix) <- sFilesNames
-  
+
   for( i in 1:length(sFiles)) {
     
     cat("\014")
@@ -59,18 +56,19 @@ for(scenario in scenariosToPredict ) {
     cat("\n")
     
     spRaster <- loadRData(sFiles[i])
-    
-    for( j in 1:nrow(polygon)) {
+
+    for( j in 1:nrow(polygon) ) {
       
       polygon.j <- polygon[j,]
       spRaster.j <- crop(spRaster,polygon.j)
+      spRaster.j <- mask(spRaster.j,polygon.j)
       
-      if( cellStats(spRaster.j,max,na.rm=T) == 0 ) { next }
-      
-      cells <- sfraster::cellFromPolygon(spRaster.j,polygon.j)
-      
-      if( 1 %in% spRaster.j[unlist(cells)] ) { resMatrix[j,i] <- 1 }
-      
+      if( cellStats(spRaster.j,max,na.rm=T) != 0 ) { 
+        
+        resMatrix[j,i] <- 1
+        
+      }
+    
     }
     
   }

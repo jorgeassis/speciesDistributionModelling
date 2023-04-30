@@ -37,7 +37,9 @@ for(scenario in scenariosToPredict ) {
   sFiles <- sFiles[!grepl("Loss",sFiles)]
   sFiles <- sFiles[!grepl("Refugia",sFiles)]
   sFiles <- sFiles[!grepl("RangeShifts",sFiles)]
-  
+  sFiles <- sFiles[!grepl("ensembleSD",sFiles)]
+
+    
   sFiles <- sFiles[unlist(sapply(speciesPredicted,function(x) { which(unlist(grepl(paste0(x,"/Predictions"),sFiles))) } ))]
   sFiles <- unique(sFiles)
   
@@ -92,6 +94,7 @@ for(scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
     sFiles <- sFiles[grepl("Predictions",sFiles)]
     sFiles <- sFiles[grepl("ensemble",sFiles)]
     sFiles <- sFiles[grepl("Reclass",sFiles)]
+    sFiles <- sFiles[!grepl("ensembleSD",sFiles)]
     
     if(typePrediction == "Reachable") { sFiles <- sFiles[grepl("Reachable",sFiles)] }
     if(typePrediction == "unConstrained") { sFiles <- sFiles[!grepl("Reachable",sFiles)] }
@@ -165,6 +168,40 @@ for(scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
   
   save( metric , file=paste0(stackResultsFolder,"/Maps/","/speciesExchangeRatio2",scenario,typePrediction,".RData"), compress=TRUE, compression_level=6)
 
+}
+
+## ---------------------------------
+## Uncertainty
+
+for(scenario in scenariosToPredict ) {
+
+  sFiles <- list.files(mainResultsDirectory,pattern="RData",full.names = TRUE,recursive=TRUE)
+  
+  sFiles <- sFiles[grepl("Predictions",sFiles)]
+  sFiles <- sFiles[grepl("ensembleSDGlobal",sFiles)]
+  sFiles <- sFiles[ grepl(scenario,sFiles) ]
+  
+  uncertainty <- loadRData(sFiles[1])
+  
+  for( i in 2:length(sFiles)) {
+    
+    cat("\014")
+    cat("## --------------------------------- \n")
+    cat(scenario," || ",i,"out of",length(sFiles),"\n")
+    cat("## --------------------------------- \n")
+    cat("\n")
+    
+    uncertainty <- uncertainty + loadRData(sFiles[i])
+    
+  }
+  
+  uncertainty <- uncertainty / length(sFiles)
+  uncertainty[uncertainty == 0] <- NA
+  
+  ## --------
+  
+  save( uncertainty , file=paste0(stackResultsFolder,"/Maps/","/speciesRichness",scenario,typePrediction,"Uncertainty.RData"), compress=TRUE, compression_level=6)
+  
 }
 
 ## -----------------------------------------------------------------------------------------------

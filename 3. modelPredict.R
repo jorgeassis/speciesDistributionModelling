@@ -21,6 +21,7 @@ for( scenario in scenariosToPredict) {
   if( ! dir.exists(paste0(resultsDirectory,"/Predictions/",scenario,"/")) ) { dir.create( paste0(resultsDirectory,"/Predictions/",scenario,"/") , recursive = TRUE) }
   
   rasterLayers <- list.files(gsub("Baseline",scenario,climateLayersDirectory),pattern=dataLayersFileType,full.names = TRUE, recursive = TRUE)
+  rasterLayers <- rasterLayers[!grepl("@",rasterLayers)]
   rasterLayers <- stack(rasterLayers[as.vector(sapply(tolower(dataLayers),function(x) { which( grepl(x,tolower(rasterLayers))) } ))])
   
   if( scenario == scenariosToPredict[1] ) {
@@ -34,16 +35,18 @@ for( scenario in scenariosToPredict) {
   # ---------------------
 
   modelDataList <- unlist(sapply(algorithms, function(x) { list.files(paste0(resultsDirectory,"/Models/"), pattern = paste0(x,".RData"), full.names = TRUE) } ))
+  
   if( reduceModelcomplexity ) { modelDataList <- modelDataList[grepl("reducedModel",modelDataList)] } 
   if(! reduceModelcomplexity ) { modelDataList <- modelDataList[!grepl("reducedModel",modelDataList)] } 
-  ensemblePrediction <- ensembleModels(modelDataList,rasterLayers)
+  
+  ensemblePrediction <- ensembleModels(modelDataList,rasterLayers, type="weiAverage")
   ensemble <- ensemblePrediction$prediction
   ensembleSD <- ensemblePrediction$prediciton.sd
 
   # ---------------------
 
   if( scenario == "Baseline" ) {
-    accur <- predictedPerformance(ensemble,modelData,reclassificationIndex)
+    accur <- predictedPerformance(ensemble,modelData,reclassificationIndex,type="threshold")
     reclassificationThreshold <- accur$threshold
     save( accur , file=paste0(resultsDirectory,"/SummaryModels/ensemblePerformance.RData"))
   }
@@ -70,7 +73,9 @@ for( scenario in scenariosToPredict) {
   save( ensembleReclassReach , file=paste0(resultsDirectory,"/Predictions/",scenario,"/ensembleReclassReachable.RData"), compress=TRUE, compression_level=6)
   
   if(scenario == "Baseline") {
-    accur <- predictedPerformance(ensemble*ensembleReclassReach,modelData,reclassificationIndex)
+    boyce <- accur$boyce
+    accur <- predictedPerformance(ensemble*ensembleReclassReach,modelData,reclassificationIndex,type="threshold")
+    accur$boyce <- boyce
     save( accur , file=paste0(resultsDirectory,"/SummaryModels/ensemblePerformanceReachable.RData"))
     nonReachableCells <- Which(ensembleReclassReach == 0 & ensembleReclass == 1, cells=TRUE)
   }
@@ -79,17 +84,20 @@ for( scenario in scenariosToPredict) {
   # ---------------------------------------------------------------------
   # Project to global extent
 
-  ensembleGlobal <- ensembleReclassGlobal <- ensembleReclassReachGlobal <- shape
+  ensembleSDGlobal <- ensembleGlobal <- ensembleReclassGlobal <- ensembleReclassReachGlobal <- shape
   
   ensembleDF <- as.data.frame(ensemble, xy=T, na.rm=T)
+  ensembleSDDF <- as.data.frame(ensembleSD, xy=T, na.rm=T)
   ensembleReclassDF <- as.data.frame(ensembleReclass, xy=T, na.rm=T)
   ensembleReclassReachDF <- as.data.frame(ensembleReclassReach, xy=T, na.rm=T)
   
   ensembleGlobal[ cellFromXY( ensembleGlobal , ensembleDF[,c("x","y")] ) ] <- ensembleDF[,"layer"]
+  ensembleSDGlobal[ cellFromXY( ensembleSDGlobal , ensembleSDDF[,c("x","y")] ) ] <- ensembleSDDF[,"layer"]
   ensembleReclassGlobal[ cellFromXY( ensembleReclassGlobal , ensembleReclassDF[,c("x","y")] ) ] <- ensembleReclassDF[,"layer"]
   ensembleReclassReachGlobal[ cellFromXY( ensembleReclassReachGlobal , ensembleReclassReachDF[,c("x","y")] ) ] <- ensembleReclassReachDF[,"layer"]
   
   save( ensembleGlobal , file=paste0(resultsDirectory,"/Predictions/",scenario,"/ensembleGlobal.RData"), compress=TRUE, compression_level=6)
+  save( ensembleSDGlobal , file=paste0(resultsDirectory,"/Predictions/",scenario,"/ensembleSDGlobal.RData"), compress=TRUE, compression_level=6)
   save( ensembleReclassGlobal , file=paste0(resultsDirectory,"/Predictions/",scenario,"/ensembleReclassGlobal.RData"), compress=TRUE, compression_level=6)
   save( ensembleReclassReachGlobal , file=paste0(resultsDirectory,"/Predictions/",scenario,"/ensembleReclassReachableGlobal.RData"), compress=TRUE, compression_level=6)
   
@@ -143,7 +151,10 @@ for( scenario in scenariosToPredict) {
 
   if( length(Which(ensembleReclassGlobal == 1,cells=T)) > 0) {
     
-    occurrenceRecordsDepths <- abs( raster::extract(raster(bathymetryDataLayer),xyFromCell(ensembleReclassGlobal,Which(ensembleReclassGlobal == 1,cells=T))) )
+    if( length(bathymetryDataLayer) == 1 ) { bathymetry <- raster(bathymetryDataLayer) }
+    if( length(bathymetryDataLayer) >= 2 ) { bathymetry <- calc(stack(bathymetryDataLayer),mean) }
+    
+    occurrenceRecordsDepths <- abs( raster::extract(bathymetry,xyFromCell(ensembleReclassGlobal,Which(ensembleReclassGlobal == 1,cells=T))) )
     
   }
   

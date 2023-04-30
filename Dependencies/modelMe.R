@@ -9,7 +9,7 @@ if( modelType == "MBOOST" ) {
 }
 
 if( modelType == "XGBOOST" ) {
-  hyperParam <-  list(gamma=xgboostGamma, shrinkage = xgboostShrinkage  , depth = xgboostDepth, nrounds = xgboostRounds)
+  hyperParam <- list(gamma=xgboostGamma, shrinkage = xgboostShrinkage  , depth = xgboostDepth, nrounds = xgboostRounds)
 }
 
 gridMatrix <- modelGridSearch(modelType,hyperParam,modelData,cvFolds,monotonicity,cvIndex)

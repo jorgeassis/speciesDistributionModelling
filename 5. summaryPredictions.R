@@ -99,9 +99,12 @@ write.csv(resultsDF, file=paste0(resultsFolder,"/summaryPerSpecies.csv"), row.na
 areaPredicted <- raster::area(finalEnsembleReclassM) * finalEnsembleReclassM
 sum(getValues(areaPredicted),na.rm=TRUE) # km2
 
+if( length(bathymetryDataLayer) == 1 ) { bathymetry <- raster(bathymetryDataLayer) }
+if( length(bathymetryDataLayer) >= 2 ) { bathymetry <- calc(stack(bathymetryDataLayer),mean) }
+
 bathyPredicted <- finalEnsembleReclassM
 bathyPredicted[bathyPredicted == 0] <- NA
-bathyPredicted <- crop(raster(bathymetryDataLayer),bathyPredicted) * bathyPredicted * (-1)
+bathyPredicted <- crop(bathymetry,bathyPredicted) * bathyPredicted * (-1)
 
 bathyPredicted <- getValues(bathyPredicted)
 bathyPredicted<- bathyPredicted[!is.na(bathyPredicted)] 
@@ -160,7 +163,7 @@ sum(getValues( raster::area(gain) * gain),na.rm=TRUE) # km2
 
 bathyPredicted <- gain
 bathyPredicted[bathyPredicted == 0] <- NA
-bathyPredicted <- crop(raster(bathymetryDataLayer),bathyPredicted) * bathyPredicted * (-1)
+bathyPredicted <- crop(bathymetry,bathyPredicted) * bathyPredicted * (-1)
 
 bathyPredicted <- getValues(bathyPredicted)
 bathyPredicted<- bathyPredicted[!is.na(bathyPredicted)] 

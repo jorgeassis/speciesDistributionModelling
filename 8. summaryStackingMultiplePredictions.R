@@ -27,9 +27,12 @@ layersToCalc <- layersToCalc[grepl("speciesRichness",layersToCalc)]
 layersToCalcNames <- layersToCalcNames[grepl("speciesRichness",layersToCalcNames)] 
 
 presentDayLayer <- layersToCalc[grepl("speciesRichnessBaseline",layersToCalc)] 
+presentDayLayer <- presentDayLayer[!grepl("Uncertainty",presentDayLayer)] 
 
 layersToCalc <- layersToCalc[!grepl("speciesRichnessBaseline",layersToCalc)] 
 layersToCalcNames <- layersToCalcNames[!grepl("speciesRichnessBaseline",layersToCalcNames)] 
+layersToCalc <- layersToCalc[!grepl("Uncertainty",layersToCalc)] 
+layersToCalcNames <- layersToCalcNames[!grepl("Uncertainty",layersToCalcNames)] 
 
 ## -------------------------------------------------------------------------------
 ## -------------------------------------------------------------------------------
@@ -53,8 +56,7 @@ if( resultsName == "Global" ) {
 
 if( resultsName != "Global" ) {
   
-  polygonPath <- polygon
-  if(class(polygon) == "character") { polygon <- shapefile(polygon) }
+  if(class(polygonPath) == "character") { polygon <- shapefile(polygonPath) }
   
   if( ! is.null(polygonFeature) ) { 
     
@@ -152,8 +154,11 @@ if(typePrediction == "unConstrained") {
 }
 layersToCalc <- layersToCalc[ sort(unique(unlist(sapply(scenariosToPredict, function(x) { which(grepl(x,layersToCalc)) } )))) ] 
 layersToCalcNames <- layersToCalcNames[ sort(unique(unlist(sapply(scenariosToPredict, function(x) { which(grepl(x,layersToCalcNames)) } )))) ] 
+layersToCalc <- layersToCalc[!grepl("Uncertainty",layersToCalc)] 
+layersToCalcNames <- layersToCalcNames[!grepl("Uncertainty",layersToCalcNames)] 
 
 presentDayLayer <- layersToCalc[grepl("speciesRichnessBaseline",layersToCalc)] 
+presentDayLayer <- presentDayLayer[!grepl("Uncertainty",presentDayLayer)] 
 
 layersToCalc <- layersToCalc[grepl("rangeRefugia",layersToCalc)] 
 layersToCalcNames <- layersToCalcNames[grepl("rangeRefugia",layersToCalcNames)] 
@@ -180,7 +185,7 @@ if( resultsName == "Global" ) {
 
 if( resultsName != "Global" ) {
   
-  if(class(polygon) == "character") { polygon <- shapefile(polygon) }
+  if(class(polygonPath) == "character") { polygon <- shapefile(polygonPath) }
   
   if( ! is.null(polygonFeature) ) { 
     
@@ -260,3 +265,4 @@ names(resultsDF) <- gsub("Reachable","",names(resultsDF))
 names(resultsDF) <- gsub("angeR","",names(resultsDF))
 
 write.csv(resultsDF, file=paste0(stackResultsFolder,"/Summary","/summaryExtentRefugia",resultsName,typePrediction,".csv"), row.names = FALSE)
+rm(polygon)

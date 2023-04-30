@@ -24,11 +24,11 @@ source("0. config.R")
 
 overwrite <- TRUE
 
-mainResultsDirectory <- "/Volumes/HammerHead/Data/Distribution Models/Global distribution of cold water corals/Results/"
-climateLayersDirectory <- "/Volumes/HammerHead/Data/Distribution Models/Global distribution of cold water corals/Data/Climate/Baseline/"
+mainResultsDirectory <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Results/"
+climateLayersDirectory <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Climate/Baseline/"
 dataLayersFileType <- "tif"
 
-dataRecordsFile <- "/Volumes/HammerHead/Data/Distribution Models/Global distribution of cold water corals/Data/Records/databaseCWC.csv"
+dataRecordsFile <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Records/databaseCWC.csv"
 dataRecordsNames <- c("Lon","Lat")
 
 dataLayers <- c("DissolvedMolecularOxygen BenthicMean Ltmin","OceanTemperature BenthicMean LtMax","OceanTemperature BenthicMean LtMin","Salinity BenthicMean Ltmin","pH BenthicMean Ltmin","Slope BenthicMean","TotalPhytoplankton BenthicMean Ltmin","TerrainRuggednessIndex BenthicMean")
@@ -41,10 +41,10 @@ data.frame(names(monotonicity),dataLayers)
 ## -------------------
 
 worldMap <- ne_countries(scale = "medium", returnclass = "sf")
-bathymetryDataLayer <- "Dependencies/Data/Rasters/bathymetryDepthMeanRes005.tif"
+bathymetryDataLayer <- c("Dependencies/Data/Rasters/BathymetryDepthMinRes005.tif","Dependencies/Data/Rasters/BathymetryDepthMaxRes005.tif")
 intertidal <- NULL # "Dependencies/Data/Rasters/coastLineRes005.tif"
 
-depthTraits <- "/Volumes/HammerHead/Data/Distribution Models/Global distribution of cold water corals/Data/Records/databaseCWCTraits.csv"
+depthTraits <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Records/databaseCWCTraits.csv"
 minDepth <- NULL 
 maxDepth <- NULL 
 maxDepthBuffer <- 100
@@ -86,11 +86,11 @@ speciesList <- sort(unique(dataRecords$speciesName))
 ## ------------------------------------------------------------------
 ## Model species
 
-overwrite <- FALSE
+overwrite <- TRUE
 if( ! overwrite) { 
   predictedSpecies <- character(0)
   for( species in list.files(mainResultsDirectory) ) {
-    if( sum(sapply(algorithms, function(x) { length(list.files( paste0(mainResultsDirectory,"/",species,"/Models/"), pattern = x, recursive=T)) } )) == length(algorithms) )  { predictedSpecies <- c(predictedSpecies,species) }
+    if( sum(sapply(algorithms, function(x) { length(list.files( paste0(mainResultsDirectory,"/",species,"/Models/"), pattern = x, recursive=T)) } )) >= length(algorithms) )  { predictedSpecies <- c(predictedSpecies,species) }
   }
   speciesList <- speciesList[ ! speciesList %in% predictedSpecies] 
 }
@@ -139,6 +139,7 @@ modelParallel <- foreach(species = speciesList, .export=ls(globalenv()), .packag
   # Environmental layers
   
   rasterLayers <- list.files(climateLayersDirectory,pattern=dataLayersFileType,full.names = TRUE, recursive = TRUE)
+  rasterLayers <- rasterLayers[!grepl("@",rasterLayers)]
   rasterLayers <- stack(rasterLayers[as.vector(sapply(dataLayers,function(x) { which( grepl(x,rasterLayers)) } ))])
   rasterLayers <- processLayers(rasterLayers,occurrenceRecords,regionBuffer, minDepth=ifelse( is.null(minDepth), "NULL" , ifelse(minDepth-minDepthBuffer < 0 , 0 , minDepth-minDepthBuffer)) , maxDepth=ifelse( is.null(maxDepth), "NULL" , maxDepth+maxDepthBuffer),intertidal)
   names(rasterLayers) <- dataLayersName

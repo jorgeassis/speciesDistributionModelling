@@ -10,10 +10,9 @@ nCores <- 12
 ## -----------------------------------------------------------------------------------------------
 ## -----------------------------------------------------------------------------------------------
 
-resultsDirectorySpecies <- "/Volumes/StingRay/Dropbox/Data/Distribution Models/Global distribution of seagrasses/Results"
 species <- "Zostera marina"
 
-r1Files <- list.files(paste0(resultsDirectorySpecies,"/"),pattern = "ensembleReclassReachableGlobal", full.names = T, recursive = TRUE)
+r1Files <- list.files(paste0(mainResultsDirectory,"/"),pattern = "ensembleReclassReachableGlobal", full.names = T, recursive = TRUE)
 r1Files <- r1Files[grepl(species,r1Files)]
 r1Files
 
@@ -32,7 +31,7 @@ save(r1,filename="")
 
 # 2. Substitute over other rasters
 r1Files
-file.r <- 5
+file.r <- 4
 r2 <- loadRData(r1Files[file.r])
 r2[cells] <- 1
 save(r2,file=r1Files[file.r])

@@ -24,10 +24,12 @@ layersToCalc <- layersToCalc[grepl("speciesRichness",layersToCalc)]
 layersToCalcNames <- layersToCalcNames[grepl("speciesRichness",layersToCalcNames)] 
 layersToCalc <- layersToCalc[!grepl("speciesRichnessChanges",layersToCalc)] 
 layersToCalcNames <- layersToCalcNames[!grepl("speciesRichnessChanges",layersToCalcNames)] 
+layersToCalc <- layersToCalc[!grepl("Uncertainty",layersToCalc)] 
+layersToCalcNames <- layersToCalcNames[!grepl("Uncertainty",layersToCalcNames)] 
 
 ## Per latitude
 
-regionOfInterest <- extent(loadRData(presentDayLayer))
+regionOfInterest <- extent(loadRData(layersToCalc[grepl("Baseline",layersToCalc)]))
 bins <- seq(regionOfInterest[3],regionOfInterest[4], by=1)
 bins <- data.frame(binFrom=bins[-length(bins)],binTo=bins[-1])
 bins <- bins[ sort(bins$binFrom, decreasing = TRUE, index.return=T)$ix , ]

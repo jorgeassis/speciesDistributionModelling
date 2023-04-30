@@ -9,6 +9,8 @@
 packages.to.use <- c(  
       "credentials"
       ,"SDMtune"
+      ,"modEvA"
+      ,"blockCV"
       ,"ecospat" 
       ,"plyr"
       ,"raster"
@@ -49,7 +51,7 @@ packages.to.use <- unique(packages.to.use)
 for(package in packages.to.use) {
   print(package)
   
-  if( ! package %in% rownames(installed.packages()) ) { stop("From folder !") }
+ # if( ! package %in% rownames(installed.packages()) ) { stop("From folder !") }
   
   if( ! package %in% rownames(installed.packages()) & package == "RStoolbox" ) { install_github("bleutner/RStoolbox") }
   if( ! package %in% rownames(installed.packages()) & package == "USE" ) { devtools::install_github("danddr/USE") }
@@ -99,7 +101,7 @@ loadRData <- function(fileName){
 
 ## -----------------------
 
-ensembleModels <- function(modelDataList,rasterLayers) {
+ensembleModels <- function(modelDataList,rasterLayers,type) {
   
   shape <- subset(rasterLayers,1)
   shape[!is.na(shape)] <- 1
@@ -107,12 +109,14 @@ ensembleModels <- function(modelDataList,rasterLayers) {
   matrixLayers <- as.data.frame(rasterLayers[cells])
   
   ensemble <- matrix(NA,ncol=length(modelDataList),nrow=length(cells))
+  ensemble.performance <- numeric(0)
   
   for(m in 1:length(modelDataList)) {
 
     model.i <- loadRData(modelDataList[m])
     modelDataList.i <- model.i$models
-
+    ensemble.performance <- c(ensemble.performance,model.i$performance$auc)
+      
     prediction <- matrix(NA,ncol=length(modelDataList.i),nrow=length(cells))
     matrixLayers.i <- matrixLayers
     
@@ -130,7 +134,10 @@ ensembleModels <- function(modelDataList,rasterLayers) {
   
   shape[] <- NA
   rast <- shape
-  rast[cells] <- apply(ensemble,1,mean)
+  
+  if( type == "weiAverage") { rast[cells] <- apply(ensemble, 1, weighted.mean, w=ensemble.performance) }
+  if( type == "average") { rast[cells] <- apply(ensemble,1,mean) }
+  
   rast[rast < 0] <- 0
   rast[rast > 1] <- 1
   
@@ -168,11 +175,21 @@ drawPolygon <- function(r1) {
 
 ## -----------------------
 
-predictedPerformance <- function(prediction,modelData,cvIndex) {
+predictedPerformance <- function(prediction,modelData,cvIndex,type="regular") {
   
   observed <- modelData@pa
   predicted <- raster::extract(prediction,modelData@coords)
   predicted.accuracy <- modelPerformance(observed,predicted,cvIndex)
+  predicted.accuracy.threshold <- predicted.accuracy$threshold
+  predicted.accuracy.boyce <- predicted.accuracy$boyce
+  
+  if( type == "threshold" ) {
+    observed[which( observed == 0 & predicted >= predicted.accuracy$threshold )] <- 1
+    predicted.accuracy <- modelPerformance(observed,predicted,cvIndex)
+    predicted.accuracy$threshold <- predicted.accuracy.threshold
+    predicted.accuracy$boyce <- predicted.accuracy.boyce
+  }
+  
   return(predicted.accuracy)
   
 }
@@ -281,10 +298,10 @@ modelGridSearch <- function(modelType,hyperParam,modelData,cvFolds,monotonicity,
         if( "max.depth" %in% names(combP)) { max.depth = combP[c,"max.depth"] } else { max.depth = 2 }
         if( "gamma" %in% names(combP)) { gamma = combP[c,"gamma"] } else { gamma = 0 }
         if( "nrounds" %in% names(combP)) { nrounds = combP[c,"nrounds"] } else { nrounds = 50 }
-        trainData = xgb.DMatrix(data = data.matrix(trainData[,-1]), label = trainData[,1])
-        testData = xgb.DMatrix(data = data.matrix(testData[,-1]), label = testData[,1])
+        trainData = xgb.DMatrix(data = data.matrix(trainData[,-1]), label = trainData[,1], nthread = 1)
+        testData = xgb.DMatrix(data = data.matrix(testData[,-1]), label = testData[,1], nthread = 1)
         model <- NULL
-        tryCatch( model <- xgboost(data = trainData, monotone_constraints=monotonicity.i, max_depth = max.depth, gamma=gamma, nrounds = nrounds , verbose = 0, objective="binary:logistic") , error=function(e) { Error <<- TRUE })
+        tryCatch( model <- xgboost(data = trainData, monotone_constraints=monotonicity.i, max_depth = max.depth, gamma=gamma, nrounds = nrounds , verbose = 0, nthread = 1, objective="binary:logistic") , error=function(e) { Error <<- TRUE })
       }
       
       if( is.null(model) ) { next }
@@ -411,8 +428,9 @@ prepareModelData <- function(p,a,env) {
   
   a <- xyFromCell(m,cellFromXY(m,a))
   a <- unique(a)
-  
-  return(prepareSWD(species = "Model species", p = p, a = a, env = env))
+
+  tryCatch( modelData <- prepareSWD(species = "Model species", p = p, a = a, env = env), error=function(e) { modelData <<- prepareSWD(species = "Model species", p = p, a = a, env = terra::rast(env)) })
+  return(modelData)
   
 }
 
@@ -738,7 +756,9 @@ relocateNACoords <- function(occurrenceRecords,rasterLayers,relocateType,relocat
       
       shape <- subset(rasterLayers,1)
       
-      bathymetry <- raster(bathymetryDataLayer)
+      if( length(bathymetryDataLayer) == 1 ) { bathymetry <- raster(bathymetryDataLayer) }
+      if( length(bathymetryDataLayer) >= 2 ) { bathymetry <- calc(stack(bathymetryDataLayer),mean) }
+      
       bathymetry <- crop(bathymetry, shape )
       bathymetry <- mask(bathymetry,shape )
       
@@ -815,7 +835,7 @@ relocateNACoords <- function(occurrenceRecords,rasterLayers,relocateType,relocat
 
 ## -----------------------
 
-spatialAutocorrelation <- function(rasterLayers) {
+spatialAutocorrelation <- function(rasterLayers,autocorrelationClassDistance,autocorrelationMaxDistance) {
   
   rasterLayers.i <- as.data.frame(rasterLayers,xy=T,na.rm=T)
   presences.environment <- rasterLayers.i[,which(!colnames(rasterLayers.i) %in% c("x","y"))]
@@ -1053,12 +1073,13 @@ generatePseudoAbsences <- function(occurrenceRecords,rasterLayers,paType) {
     crs(occurrenceRecords.sp) <- crs(rasterLayers)
     occurrenceRecords.sp <- raster::buffer(occurrenceRecords.sp, width=111000)
     
-    pseudoAbsences.sp <- pseudoAbsences
-    coordinates(pseudoAbsences.sp) <- ~x+y
-    crs(pseudoAbsences.sp) <- crs(rasterLayers)
+    if(paRemoveOverOccurrence) {
+      pseudoAbsences.sp <- pseudoAbsences
+      coordinates(pseudoAbsences.sp) <- ~x+y
+      crs(pseudoAbsences.sp) <- crs(rasterLayers)
+      pseudoAbsences <- pseudoAbsences[which(is.na(over(pseudoAbsences.sp,occurrenceRecords.sp))),]
+    }
 
-    pseudoAbsences <- pseudoAbsences[which(is.na(over(pseudoAbsences.sp,occurrenceRecords.sp))),]
-  
   }
   
   if( paType == "mess" ) {
@@ -1121,11 +1142,13 @@ generatePseudoAbsences <- function(occurrenceRecords,rasterLayers,paType) {
     coordinates( sink.points.poly ) <- dataRecordsNames
     proj4string( sink.points.poly ) <- CRS( "+proj=longlat +datum=WGS84" )
     sink.points.poly <- raster::buffer(sink.points.poly, width=111000)
-    pseudoAbsences.sp <- pseudoAbsences
-    coordinates(pseudoAbsences.sp) <- ~x+y
-    crs(pseudoAbsences.sp) <- crs(rasterLayers)
-    pseudoAbsences.sp.over <- which(is.na( over(pseudoAbsences.sp,sink.points.poly)))
-    pseudoAbsences <- pseudoAbsences[pseudoAbsences.sp.over,]
+
+    if(paRemoveOverOccurrence) {
+      pseudoAbsences.sp <- pseudoAbsences
+      coordinates(pseudoAbsences.sp) <- ~x+y
+      crs(pseudoAbsences.sp) <- crs(rasterLayers)
+      pseudoAbsences <- pseudoAbsences[which(is.na(over(pseudoAbsences.sp,occurrenceRecords.sp))),]
+    }
 
   }
   
@@ -1154,8 +1177,8 @@ generatePseudoAbsences <- function(occurrenceRecords,rasterLayers,paType) {
     
     library(USE)
     library(sf)
-    
-    prevalence <- nrow(occurrenceRecords) / final.paRatio
+  
+    prevalence <- nrow(occurrenceRecords) / max(paMinimum,nrow(occurrenceRecords))
 
     sink.points.poly <- as.data.frame(occurrenceRecords)
     coordinates( sink.points.poly ) <- dataRecordsNames
@@ -1244,11 +1267,12 @@ generatePseudoAbsences <- function(occurrenceRecords,rasterLayers,paType) {
     crs(occurrenceRecords.sp) <- crs(rasterLayers)
     occurrenceRecords.sp <- raster::buffer(occurrenceRecords.sp, width=111000)
     
-    pseudoAbsences.sp <- pseudoAbsences
-    coordinates(pseudoAbsences.sp) <- ~x+y
-    crs(pseudoAbsences.sp) <- crs(rasterLayers)
-    
-    pseudoAbsences <- pseudoAbsences[which(is.na(over(pseudoAbsences.sp,occurrenceRecords.sp))),]
+    if(paRemoveOverOccurrence) {
+      pseudoAbsences.sp <- pseudoAbsences
+      coordinates(pseudoAbsences.sp) <- ~x+y
+      crs(pseudoAbsences.sp) <- crs(rasterLayers)
+      pseudoAbsences <- pseudoAbsences[which(is.na(over(pseudoAbsences.sp,occurrenceRecords.sp))),]
+    }
     
   }
   
@@ -1279,6 +1303,7 @@ resampleRecords <- function(records,rasterLayers,nRecords,EnvironmentStrat=TRUE,
     
     pa.environment <- raster::extract( rasterLayers, records)
     pa.environment <- pa.environment[,which(!is.na(pa.environment[1,]))]
+    pa.environment <- as.data.frame(scale(pa.environment))
     
     nRecords <- min(nRecords,nrow(pa.environment)) -1
     

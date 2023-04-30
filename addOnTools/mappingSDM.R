@@ -13,12 +13,16 @@
 closeAllConnections()
 gc(reset=TRUE)
 
+if( ! "h3js" %in% rownames(installed.packages()) ) { devtools::install_github("saurfang/h3js") }
+if( ! "h3jsr" %in% rownames(installed.packages()) ) { remotes::install_github("obrl-soil/h3jsr") }
+
 library( rnaturalearth )
 library( h3js )
+library( h3jsr )
 library( sf )
 library(maptools)
 
-source("Dependencies/mainFunctions.R")
+# source("Dependencies/mainFunctions.R")
 
 themeMapEqual <- theme( text = element_text(family = "Helvetica", color = "#22211d"), axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks = element_blank(), axis.title.x = element_blank(), axis.title.y = element_blank(), panel.grid.major = element_line(color = "black", size = 0.1), panel.grid.minor = element_blank(), plot.background = element_rect(fill = "#FFFFFF", color = NA), panel.background = element_rect(fill = "#FFFFFF", color = NA), panel.border = element_blank(), legend.background = element_rect(fill = "#FFFFFF", color = NA), legend.position="bottom", legend.box = "horizontal", legend.margin=margin(0,0,0,0), legend.box.margin=margin(-10,-10,-10,-10), legend.key.height= unit(0.25, 'cm'), legend.key.width= unit(0.75, 'cm') )
 
@@ -64,15 +68,16 @@ mainGlobalMapEqual <- ggplot() +
 
 # Species by Species maps
 
-stackResultsFolderSpecies <- "//Volumes/StingRay/Dropbox/Data/Distribution Models/Global distribution of marine forests/Results/"
-directoryMaps <- "/Volumes/StingRay/Dropbox/Manuscripts/Major restructuring of marine forests diversity under projected climate change/Results/Maps/perSpecies/"
-scenariosToPredict <- c("Baseline","ssp119","ssp245","ssp370","ssp585")
+directoryMaps <- paste0(stackResultsFolder,"/Maps/perSpecies/")
+scenariosToPredict <- c("Baseline","ssp119","ssp370","ssp585")
 modelType <- ""
+
+if( ! dir.exists(directoryMaps) ) { dir.create(directoryMaps, recursive = TRUE) }
 
 for( scenario in scenariosToPredict ) {
 
-    allMaps <- list.files( stackResultsFolderSpecies, pattern = "Global.RData", full.names = T, recursive=T )
-    allMapsNames <- list.files( stackResultsFolderSpecies, pattern = "Global.RData", full.names = F , recursive=T )
+    allMaps <- list.files( mainResultsDirectory, pattern = "Global.RData", full.names = T, recursive=T )
+    allMapsNames <- list.files( mainResultsDirectory, pattern = "Global.RData", full.names = F , recursive=T )
     allMaps <- allMaps[grepl("ensembleReclassReachable",allMaps)] # Reachable unConstrained
     allMapsNames <- allMapsNames[grepl("ensembleReclassReachable",allMapsNames)] # Reachable unConstrained
     allMaps <- allMaps[grepl(scenario,allMaps)] 
@@ -85,13 +90,18 @@ for( scenario in scenariosToPredict ) {
     cl <- parallel::makeCluster(nCores)
     registerDoParallel(cl)
     
-    mappingParallel <- foreach(i = 1:length(allMaps), .export=ls(globalenv()), .packages = packages.to.use) %dopar% {
+    mappingParallel <- foreach(i = 1:length(allMaps) ) %dopar% {
+
+      source(mainfunctionsFile, local = TRUE)
+      source(mainConfigFile, local = TRUE)
+      
+      ## ---------------------
       
       m <- allMaps[i]
       name <- allMapsNames[i]
       
       if( scenario == "Baseline" ) {
-        occurrecence <- loadRData(paste0(stackResultsFolderSpecies,"/",name,"/Data/modelData.RData"))
+        occurrecence <- loadRData(paste0(mainResultsDirectory,"/",name,"/Data/modelData.RData"))
         occurrecence <- occurrecence@coords[occurrecence@pa==1,]
       }
       
@@ -109,7 +119,7 @@ for( scenario in scenariosToPredict ) {
       rasterMapDF <- data.frame(rasterMapDF,hex=apply(rasterMapDF[,1:2],1,function(x) { h3js::h3_geo_to_h3(x[[2]], x[[1]], res = resolutionH3) } ))
       rasterMapDF <- data.frame(hex=unique(rasterMapDF$hex),val=sapply(unique(rasterMapDF$hex),function(x) { mean(rasterMapDF[rasterMapDF$hex == x , "val"],na.rm=T) } ))
 
-      rasterMapDF.polygons <- h3jsr::h3_to_polygon(rasterMapDF$hex, simple = FALSE)
+      rasterMapDF.polygons <- h3jsr::cell_to_polygon(input = rasterMapDF$hex, simple = FALSE)
       rasterMapDF.polygons$hex <- as.character(rasterMapDF$hex)
       rasterMapDF.polygons$value <- as.numeric(as.character(rasterMapDF$val))
       ref <- st_crs(rasterMapDF.polygons)
@@ -160,29 +170,33 @@ for( scenario in scenariosToPredict ) {
 # ------------------------------------------------------------------------------
 # Continuous Map 
 
-stackResultsFolder <- "/Users/jorgeassis/Desktop/Modelling future distributional shifts of cold water corals/Results/Maps/"
-
-files <- list.files( stackResultsFolder, pattern = "RData", full.names = T )
-filesNames <- list.files( stackResultsFolder, pattern = "RData", full.names = F )
+files <- list.files( stackResultsFolder, pattern = "RData", full.names = T , recursive = TRUE)
 files <- files[grepl("Reachable",files)] # Reachable unConstrained
-filesNames <- filesNames[grepl("Reachable",filesNames)] # Reachable unConstrained
+files <- files[!grepl("ExchangeRatio1",files)] 
 files <- files[!grepl("extinction",files)] 
 files <- files[!grepl("Changes",files)] 
-filesNames <- filesNames[!grepl("extinction",filesNames)]
-filesNames <- filesNames[!grepl("Changes",filesNames)]; filesNames
 
 autoLegend <- FALSE
 
-cl <- parallel::makeCluster(5)
+cl <- parallel::makeCluster(10)
 registerDoParallel(cl)
 
-mappingParallel <- foreach(m = 1:length(files), .export=ls(globalenv()), .packages = packages.to.use) %dopar% {
+mappingParallel <- foreach(m = 1:length(files) ) %dopar% {
+  
+  source(mainfunctionsFile, local = TRUE)
+  source(mainConfigFile, local = TRUE)
+  
+  ## ---------------------
   
   rasterMap <- loadRData( files[m] )
-  mapName <- gsub(".RData","",filesNames[m])
-  
+  mapName <- gsub(paste0(stackResultsFolder,"/Maps"),"",files[m])
+  mapName <- gsub("/","",mapName)
+  mapName <- gsub(".RData","",mapName)
+
   if( grepl("Refugia", mapName ) | grepl("Loss", mapName ) ) {
-    rasterMapPresent <- loadRData(files[grepl("RichnessBaseline",files)])
+    rasterMapPresent <- files[grepl("RichnessBaseline",files)]
+    rasterMapPresent <- rasterMapPresent[!grepl("Uncertainty",rasterMapPresent)]
+    rasterMapPresent <- loadRData(rasterMapPresent)
     rasterMapPresent[ rasterMapPresent == 0 ] <- NA
     rasterMap <- mask(rasterMap,rasterMapPresent)
   }
@@ -196,7 +210,7 @@ mappingParallel <- foreach(m = 1:length(files), .export=ls(globalenv()), .packag
   
   rasterMapDF <- data.frame(rasterMapDF,hex=apply(rasterMapDF[,1:2],1,function(x) { h3js::h3_geo_to_h3(x[[2]], x[[1]], res = resolutionH3) } ))
   rasterMapDF <- data.frame(hex=unique(rasterMapDF$hex),val=sapply(unique(rasterMapDF$hex),function(x) { mean(rasterMapDF[rasterMapDF$hex == x , "val"],na.rm=T) } ))
-  rasterMapDF.polygons <- h3jsr::h3_to_polygon(rasterMapDF$hex, simple = FALSE)
+  rasterMapDF.polygons <- h3jsr::cell_to_polygon(input = rasterMapDF$hex, simple = FALSE)
   rasterMapDF.polygons$hex <- as.character(rasterMapDF$hex)
   rasterMapDF.polygons$value <- as.numeric(as.character(rasterMapDF$val))
   rasterMapDF.polygons <- correctDateLineMap(rasterMapDF.polygons)
@@ -204,23 +218,29 @@ mappingParallel <- foreach(m = 1:length(files), .export=ls(globalenv()), .packag
   minLegend <- min(rasterMapDF.polygons$value)
   maxLegend <- max(rasterMapDF.polygons$value)
   
+  autoLegendDF <- data.frame(mapName=mapName,minLegend=minLegend,maxLegend=maxLegend)
+    
   if( ! autoLegend ) {
     
+    if( grepl("Uncertainty", mapName ) ) {
+      minLegend <- 0
+      maxLegend <- 1
+    }
     if( grepl("Gain", mapName ) ) {
       minLegend <- 0
-      maxLegend <- 30
+      maxLegend <- 14
     }
     if( grepl("Loss", mapName ) ) {
       minLegend <- 0
-      maxLegend <- 16
+      maxLegend <- 13
     }
     if( grepl("Refugia", mapName ) ) {
       minLegend <- 0
-      maxLegend <- 32
+      maxLegend <- 19
     }
     if( grepl("speciesRichness", mapName ) ) {
       minLegend <- 1
-      maxLegend <- 35
+      maxLegend <- 20
     }
     if( grepl("speciesExchangeRatio", mapName ) ) {
       minLegend <- 0
@@ -261,34 +281,37 @@ mappingParallel <- foreach(m = 1:length(files), .export=ls(globalenv()), .packag
   print(plot1)
   dev.off()
   
+  return(autoLegendDF)
+  
 }
 
 stopCluster(cl); rm(cl)
 closeAllConnections()
 gc(reset=TRUE)
 
+autoLegendValues <- do.call(rbind,mappingParallel)
+autoLegendValues
+
 ## ------------------------------------------------------------------------------
 ## ------------------------------------------------------------------------------
 
 # Zero centered map
 
-stackResultsFolder <- "/Volumes/StingRay/Dropbox/Manuscripts/Major restructuring of marine forests diversity under projected climate change/Results/Maps/"
-
-files <- list.files( stackResultsFolder, pattern = "RData", full.names = T )
-filesNames <- list.files( stackResultsFolder, pattern = "RData", full.names = F )
+files <- list.files( stackResultsFolder, pattern = "RData", full.names = T , recursive = T)
 files <- files[grepl("Reachable",files)] # Reachable unConstrained
-filesNames <- filesNames[grepl("Reachable",filesNames)] # Reachable unConstrained
 files <- files[!grepl("extinction",files)] 
 files <- files[!grepl("Changes",files)] 
+files <- files[!grepl("Uncertainty",files)] 
 files <- files[grepl("speciesRichness",files)] 
 
 maskIntertidal <- raster("Dependencies/Data/Rasters/coastLineRes005.tif")
+
 maskDistribution <- calc(stack(sapply(files, function(x) { loadRData( x ) } )), sum)
 maskDistribution[maskDistribution > 0] <- 1
 maskDistribution[maskDistribution == 0] <- NA
 
-files <- list.files( stackResultsFolder, pattern = "RData", full.names = T )
-filesNames <- list.files( stackResultsFolder, pattern = "RData", full.names = F )
+files <- list.files( stackResultsFolder, pattern = "RData", full.names = T , recursive = T)
+filesNames <- list.files( stackResultsFolder, pattern = "RData", full.names = F , recursive = T)
 files <- files[grepl("Reachable",files)] # Reachable unConstrained
 filesNames <- filesNames[grepl("Reachable",filesNames)] # Reachable unConstrained
 files <- files[grepl("Changes",files)] 
@@ -309,7 +332,7 @@ for( m in 1:length(files) ) {
 
   rasterMapDF <- data.frame(rasterMapDF,hex=apply(rasterMapDF[,1:2],1,function(x) { h3js::h3_geo_to_h3(x[[2]], x[[1]], res = resolutionH3) } ))
   rasterMapDF <- data.frame(hex=unique(rasterMapDF$hex),val=sapply(unique(rasterMapDF$hex),function(x) { mean(rasterMapDF[rasterMapDF$hex == x , "val"],na.rm=T) } ))
-  rasterMapDF.polygons <- h3jsr::h3_to_polygon(rasterMapDF$hex, simple = FALSE)
+  rasterMapDF.polygons <- h3jsr::cell_to_polygon(input =rasterMapDF$hex, simple = FALSE)
   rasterMapDF.polygons$hex <- as.character(rasterMapDF$hex)
   rasterMapDF.polygons$value <- as.numeric(as.character(rasterMapDF$val))
   rasterMapDF.polygons <- correctDateLineMap(rasterMapDF.polygons)
@@ -320,7 +343,7 @@ for( m in 1:length(files) ) {
   if ( ! autoLegend ) {
     
     minLegend <- -15
-    maxLegend <- 30
+    maxLegend <- 12
     
   }
 
@@ -362,7 +385,7 @@ for( m in 1:length(files) ) {
   dev.off()
   
   # Class based colors
-  hexagons$categories <- as.factor(cut(hexagons$value, breaks = c(-15,-10,-5,-0.1,0.1,10,20,30), labels = c(1,2,3,4,5,6,7)))
+  hexagons$categories <- as.factor(cut(hexagons$value, breaks = c(-15,-10,-5,-0.1,0.1,4,8,12), labels = c(1,2,3,4,5,6,7)))
   
   library(RColorBrewer)
   myColors <- rev(c("#164B0B","#3D982A","#7FF567","#FFFFFF","#D679E9","#9833AC","#4E0E5B"))

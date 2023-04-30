@@ -34,7 +34,7 @@ colnames(occurrenceRecords) <- dataRecordsNames
 tryCatch( rasterLayers <- subset(rasterLayers,which(cellStats(rasterLayers,var) > 0)) , error = function(e) e <<- 0 )
 
 # Determine autocorrelation
-spatialAutocorr <- spatialAutocorrelation(rasterLayers)
+spatialAutocorr <- spatialAutocorrelation(rasterLayers,autocorrelationClassDistance,autocorrelationMaxDistance)
 minCorrDistance <- spatialAutocorr$minDistance
 meanCorrDistance <- spatialAutocorr$meanDistance
 medianCorrDistance <- spatialAutocorr$medianDistance
@@ -47,8 +47,6 @@ save(spatialAutocorr,file=paste0(resultsDirectory,"/Data/","spatialAutocorr.RDat
 # Relocate records to closest cell (those falling on land / unlikely depth)
 occurrenceRecords <- relocateNACoords(occurrenceRecords,rasterLayers,relocateType,relocateSpeciesDistance,relocateSpeciesDepth)
 
-if( nrow(occurrenceRecords) < minOccurrenceRecords ) { next }
-
 # Generate Pseudo-absences
 pseudoAbsences <- generatePseudoAbsences(occurrenceRecords,rasterLayers,paType)
 biasSurface <- pseudoAbsences$biasSurface
@@ -58,8 +56,6 @@ pseudoAbsences <- pseudoAbsences$records
 occurrenceRecords <- spatialThinning(occurrenceRecords,min(minCorrDistance,100),verbose=FALSE)
 pseudoAbsences <- spatialThinning(pseudoAbsences,min(minCorrDistance,100),verbose=FALSE)
 pseudoAbsences <- resampleRecords(pseudoAbsences,rasterLayers,max(paMinimum,nrow(occurrenceRecords)),EnvironmentStrat=TRUE,biasSurface)
-
-if( nrow(occurrenceRecords) < minOccurrenceRecords ) { next }
 
 # Drop no var Layers
 rasterLayers <- subset(rasterLayers, which(apply(raster::extract(rasterLayers,rbind(occurrenceRecords,pseudoAbsences)),2, FUN= function(x) { length(unique(x)) } ) != 1))

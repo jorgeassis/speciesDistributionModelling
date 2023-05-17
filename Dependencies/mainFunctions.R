@@ -1062,23 +1062,24 @@ generateBackgroundInformation <- function(rasterLayers,occurrenceRecords,n,spati
 generatePseudoAbsences <- function(occurrenceRecords,rasterLayers,paType) {
   
   biasSurface <- NULL
-  
+  occurrenceRecords <- as.data.frame(occurrenceRecords)
   if( paType == "random" ) {
-
-    pseudoAbsences <- as.data.frame(rasterLayers,na.rm=T,xy=T)
-    pseudoAbsences <- pseudoAbsences[complete.cases(pseudoAbsences),1:2]
-    
-    occurrenceRecords.sp <- occurrenceRecords
-    coordinates(occurrenceRecords.sp) <- ~Lon+Lat
-    crs(occurrenceRecords.sp) <- crs(rasterLayers)
-    occurrenceRecords.sp <- raster::buffer(occurrenceRecords.sp, width=111000)
+    pseudoAbsences <- xyFromCell( subset(rasterLayers,1) , Which( !is.na(subset(rasterLayers,1) ) , cells=T) )
     
     if(paRemoveOverOccurrence) {
+      
+      occurrenceRecords.sp <- occurrenceRecords
+      coordinates(occurrenceRecords.sp) <- ~Lon+Lat
+      crs(occurrenceRecords.sp) <- crs(rasterLayers)
+      occurrenceRecords.sp <- raster::buffer(occurrenceRecords.sp, width=111000)
+      
       pseudoAbsences.sp <- pseudoAbsences
       coordinates(pseudoAbsences.sp) <- ~x+y
       crs(pseudoAbsences.sp) <- crs(rasterLayers)
       pseudoAbsences <- pseudoAbsences[which(is.na(over(pseudoAbsences.sp,occurrenceRecords.sp))),]
+      
     }
+    
 
   }
   
@@ -1304,6 +1305,8 @@ resampleRecords <- function(records,rasterLayers,nRecords,EnvironmentStrat=TRUE,
     pa.environment <- raster::extract( rasterLayers, records)
     pa.environment <- pa.environment[,which(!is.na(pa.environment[1,]))]
     pa.environment <- as.data.frame(scale(pa.environment))
+    
+    pa.environment <- pa.environment[,which(!is.na(apply(pa.environment,2,var)))]
     
     nRecords <- min(nRecords,nrow(pa.environment)) -1
     

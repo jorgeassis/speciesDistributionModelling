@@ -13,7 +13,7 @@ rm(list=(ls()))
 gc(reset=TRUE)
 
 mainfunctionsFile <- "Dependencies/mainFunctions.R"
-mainConfigFile <- "0. config [seagrass test].R"
+mainConfigFile <- "0. config [coral].R"
 
 # credentials::set_github_pat()
 # exportRequirements()
@@ -36,11 +36,11 @@ if( ! is.null(bathymetryDataLayerHR) ) {
   bathymetryDataLayerHR[bathymetryDataLayerHR <= maxDepth * (-1)] <- NA
   bathymetryDataLayerHR[bathymetryDataLayerHR >= minDepth * (-1)] <- NA
   bathymetryDataLayerHR[!is.na(bathymetryDataLayerHR)] <- 1
-   
+  
   bathymetryLayerFraction <- aggregate(bathymetryDataLayerHR,res(raster(bathymetryDataLayer))[1] / res(bathymetryDataLayerHR)[1] ,sum,na.rm=T)
   bathymetryLayerFraction <- bathymetryLayerFraction / cellStats(bathymetryLayerFraction, max, na.rm=T)
   bathymetryLayerFraction <- raster::resample(bathymetryLayerFraction,raster(bathymetryDataLayer), method="ngb")
-   
+  
 }
 
 ## ---------
@@ -53,7 +53,7 @@ speciesList <- sort(unique(dataRecords$speciesName))
 ## ------------------------------------------------------------------
 ## Model species
 
-overwrite <- TRUE
+overwrite <- FALSE
 if( ! overwrite) { 
   predictedSpecies <- character(0)
   for( species in list.files(mainResultsDirectory) ) {
@@ -74,7 +74,7 @@ modelParallel <- foreach(species = speciesList, .export="monotonicity") %dopar% 
   ## ---------------------
   
   resultsDirectory <- paste0(mainResultsDirectory,"/",species,"/")
-
+  
   ## ---------------------
   
   if( ! dir.exists(resultsDirectory) ) { dir.create(resultsDirectory, recursive = TRUE) }
@@ -83,7 +83,7 @@ modelParallel <- foreach(species = speciesList, .export="monotonicity") %dopar% 
   if( ! dir.exists(paste0(resultsDirectory,"/Predictions/")) ) { dir.create(paste0(resultsDirectory,"/Predictions/"), recursive = TRUE) }
   if( ! dir.exists(paste0(resultsDirectory,"/Figures/")) ) { dir.create(paste0(resultsDirectory,"/Figures/"), recursive = TRUE) }
   if( ! dir.exists(paste0(resultsDirectory,"/Data/")) ) { dir.create(paste0(resultsDirectory,"/Data/"), recursive = TRUE) }
-
+  
   ## ---------------------
   
   occurrenceRecords <- dataRecords[which(dataRecords$speciesName == species),]
@@ -96,30 +96,44 @@ modelParallel <- foreach(species = speciesList, .export="monotonicity") %dopar% 
     
     depthTraitsData <- read.csv(depthTraits)
     depthTraitsData <- depthTraitsData[depthTraitsData$speciesName == species,]
-
+    
     minDepth <- mean(depthTraitsData$DepthMin,na.rm=T)
     maxDepth <- mean(depthTraitsData$DepthMax,na.rm=T)
     
-    if( is.na(minDepth) | is.na(maxDepth) ) { unlink(resultsDirectory, recursive=TRUE); next }
-    if( abs(diff(c(minDepth,maxDepth))) < 25 ) { minDepth <- ifelse((minDepth - 25) < 0 , 0 , minDepth - 25); maxDepth <- maxDepth + maxDepth + 25 }
+    if( is.na(minDepth) | is.na(maxDepth) ) {
+      
+      depthTraitsData <- read.csv(depthTraits)
+      depthTraitsData <- depthTraitsData[which(grepl(strsplit(species, " ")[[1]][1],depthTraitsData$speciesName)),]
+      minDepth <- mean(depthTraitsData$DepthMin,na.rm=T)
+      maxDepth <- mean(depthTraitsData$DepthMax,na.rm=T)
+      
+    }
+    
+    if( is.na(minDepth) | is.na(maxDepth) ) { unlink(resultsDirectory, recursive=TRUE); occurrenceRecords <- data.frame() }
+
+    if( ! is.na(minDepth) & ! is.na(maxDepth) ) { 
+      if( abs(diff(c(minDepth,maxDepth))) < 25 ) { minDepth <- ifelse((minDepth - 25) < 0 , 0 , minDepth - 25); maxDepth <- maxDepth + maxDepth + 25 }
+    }
     
   }
   
   ## ---------------------
   # Environmental layers
   
-  rasterLayers <- list.files(climateLayersDirectory,pattern=dataLayersFileType,full.names = TRUE, recursive = TRUE)
-  rasterLayers <- rasterLayers[!grepl("@",rasterLayers)]
-  rasterLayers <- stack(rasterLayers[as.vector(sapply(dataLayers,function(x) { which( grepl(x,rasterLayers)) } ))])
-  rasterLayers <- processLayers(rasterLayers,occurrenceRecords,regionBuffer, minDepth=ifelse( is.null(minDepth), "NULL" , ifelse(minDepth-minDepthBuffer < 0 , 0 , minDepth-minDepthBuffer)) , maxDepth=ifelse( is.null(maxDepth), "NULL" , maxDepth+maxDepthBuffer),intertidal)
-  names(rasterLayers) <- dataLayersName
-  rasterLayers <- correctLayer(rasterLayers,"Salinity","he",28,28)
-
-  worldMap <- ne_countries(scale = "medium", returnclass = "sf")
-  
-  ## ---------------------
-  
-  source("1. prepareRecords.R", local = TRUE)
+  if( nrow(occurrenceRecords) >= minOccurrenceRecords ) { 
+    
+    rasterLayers <- list.files(climateLayersDirectory,pattern=dataLayersFileType,full.names = TRUE, recursive = TRUE)
+    rasterLayers <- rasterLayers[!grepl("@",rasterLayers)]
+    rasterLayers <- stack(rasterLayers[as.vector(sapply(dataLayers,function(x) { which( grepl(x,rasterLayers)) } ))])
+    rasterLayers <- processLayers(rasterLayers,occurrenceRecords,regionBuffer, minDepth=ifelse( is.null(minDepth), "NULL" , ifelse(minDepth-minDepthBuffer < 0 , 0 , minDepth-minDepthBuffer)) , maxDepth=ifelse( is.null(maxDepth), "NULL" , maxDepth+maxDepthBuffer),intertidal)
+    names(rasterLayers) <- dataLayersName
+    rasterLayers <- correctLayer(rasterLayers,"Salinity","he",28,28)
+    
+    worldMap <- ne_countries(scale = "medium", returnclass = "sf")
+    
+    source("1. prepareRecords.R", local = TRUE)
+    
+  }
   
   ## ---------------------
   
@@ -135,7 +149,7 @@ modelParallel <- foreach(species = speciesList, .export="monotonicity") %dopar% 
   return(NULL)
   
   ## ---------------------
-
+  
 }
 
 stopCluster(cl); rm(cl)
@@ -168,7 +182,7 @@ predictParallel <- foreach(species = speciesToPredict ) %dopar% {
   
   resultsDirectory <- paste0(mainResultsDirectory,"/",species,"/")
   modelData <- loadRData(paste0(resultsDirectory,"/Data/","modelData.RData"))
-
+  
   if( ! is.null(depthTraits) ) {
     depthTraitsData <- read.csv(depthTraits)
     depthTraitsData <- depthTraitsData[depthTraitsData$speciesName == species,]
@@ -178,11 +192,11 @@ predictParallel <- foreach(species = speciesToPredict ) %dopar% {
   }
   
   ## ---------------------
-
+  
   source("3. modelPredict.R", local = TRUE)
-    
+  
   ## ---------------------
-
+  
   gc(reset=TRUE)
   return(NULL)
   
@@ -229,7 +243,7 @@ estimateParallel <- foreach(species = speciesToPredict) %dopar% {
   }
   
   ## ---------------------
-
+  
   source("4. rangeShiftEstimates.R", local = TRUE)
   
   ## ---------------------

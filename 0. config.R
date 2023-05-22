@@ -13,34 +13,34 @@
 ## ---------------------------------------------------------------------
 ## ---------------------------------------------------------------------
 
-nCores <- 12
+nCores <- 15
 
-mainResultsDirectory <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Results/"
-stackResultsFolder <-"/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/ResultsStacked/"
+mainResultsDirectory <- "/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/Results/"
+stackResultsFolder <- "/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/ResultsStacked/"
 
-climateLayersDirectory <-"/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Climate/Baseline/"
+climateLayersDirectory <-"/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/Data/Climate/Baseline/"
 dataLayersFileType <- "tif"
 
-dataRecordsFile <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Records/databasePrunnedGeograph.RData"
+dataRecordsFile <- "/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/Data/Records/finalDatasetSeagrassesReduced.RData"
 dataRecordsNames <- c("Lon","Lat")
 
-dataLayers <- c("SeaWaterSpeed BenthicMean Ltmin.tif","DissolvedMolecularOxygen BenthicMean Ltmin","OceanTemperature BenthicMean LtMax","OceanTemperature BenthicMean LtMin","Salinity BenthicMean Ltmin","pH BenthicMean Ltmin","Slope BenthicMean","TotalPhytoplankton BenthicMean Ltmin","TerrainRuggednessIndex BenthicMean")
-dataLayersName <- c("Currents","Oxygen","TempMax","TempMin","Salinity","pH","Slope","Productivity","TerrainRug") # 
-monotonicity <- c(+1,+1,-1,+1,+1,+1,+1,+1,+1)
+dataLayers <- c("Nitrate BenthicMin Ltmin","OceanTemperature BenthicMin Ltmax","OceanTemperature BenthicMin Ltmin","Salinity BenthicMin Ltmin","SeaIceCover Surface Ltmin","CoastalExposure")
+dataLayersName <- c("Nitrate","TempMax","TempMin","Salinity","seaIce","CoastalExposure") # 
+monotonicity <- c(+1,-1,+1,+1,-1,-1)
 monotonicity <- setNames(data.frame(t(monotonicity)), dataLayersName)
 monotonicity
 
 ## -------------------
 
 bathymetryDataLayer <- "Dependencies/Data/Rasters/BathymetryDepthMinRes005.tif"
-bathymetryDataLayerHR <- NULL # "../GEBCO Bathymetry Global.tif" # NULL
-intertidal <- NULL # "Dependencies/Data/Rasters/coastLineRes005.tif"
+bathymetryDataLayerHR <- "../GEBCO Bathymetry Global.tif" # NULL
+intertidal <- "Dependencies/Data/Rasters/coastLineRes005.tif" # NULL
 
-depthTraits <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Records/databaseCWCTraits.csv"
-minDepth <- NULL 
-maxDepth <- NULL 
-maxDepthBuffer <- 100
-minDepthBuffer <- 100
+depthTraits <- NULL # "/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/Data/Records/databaseCWCTraits.csv"
+minDepth <- 0 # NULL
+maxDepth <- 20 # NULL
+maxDepthBuffer <- 0
+minDepthBuffer <- 0
 
 # -------------------------------------------------
 # Raster layers and autocorrelation

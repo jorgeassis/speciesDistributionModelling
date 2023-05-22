@@ -13,7 +13,7 @@ rm(list=(ls()))
 gc(reset=TRUE)
 
 mainfunctionsFile <- "Dependencies/mainFunctions.R"
-mainConfigFile <- "0. config [coral].R"
+mainConfigFile <- "0. config.R"
 
 # credentials::set_github_pat()
 # exportRequirements()
@@ -28,7 +28,7 @@ source(mainConfigFile)
 ## ---------
 
 dataRecords <- loadRData(dataRecordsFile)
-dataRecords <- dataRecords[,c("acceptedname","decimalLongitude","decimalLatitude")]
+#dataRecords <- dataRecords[,c("acceptedname","decimalLongitude","decimalLatitude")]
 dataRecords <- dataRecords[complete.cases(dataRecords),]
 colnames(dataRecords) <- c("speciesName","Lon","Lat")
 speciesList <- sort(unique(dataRecords$speciesName))

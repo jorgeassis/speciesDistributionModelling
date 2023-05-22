@@ -18,7 +18,6 @@ if( ! is.null(polygonFeature) ) {
 for(scenario in scenariosToPredict ) {
 
   sFiles <- list.files(mainResultsDirectory,pattern="RData",full.names = TRUE,recursive=TRUE)
-  sFiles <- sFiles[unlist(sapply(speciesPredicted,function(x) { which(unlist(grepl(x,sFiles))) } ))]
   
   sFiles <- sFiles[grepl("Predictions",sFiles)]
   sFiles <- sFiles[grepl("ensemble",sFiles)]
@@ -35,17 +34,14 @@ for(scenario in scenariosToPredict ) {
   sFiles <- sFiles[!grepl("Refugia",sFiles)]
   sFiles <- sFiles[!grepl("RangeShifts",sFiles)]
   
+  sFiles <- sFiles[unlist(sapply(speciesPredicted,function(x) { agrep(x, sFiles) } ))]
   sFiles <- unique(sFiles)
   
   if(length(sFiles) > length(speciesPredicted)) { stop("Error :: 332")}
   
-  sFilesNames <- sapply(sFiles, function(x) {  substr(x,nchar(mainResultsDirectory) + 1 ,  unlist(gregexpr("/Predictions",x)) - 1)   } )
-  names(sFilesNames) <- NULL
-  sFilesNames <- gsub("/","",sFilesNames)
-  
   resMatrix <- matrix(0,nrow=nrow(polygon),ncol=length(sFiles))
   rownames(resMatrix) <- polygon$names
-  colnames(resMatrix) <- sFilesNames
+  colnames(resMatrix) <- speciesPredicted
 
   for( i in 1:length(sFiles)) {
     

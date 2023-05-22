@@ -27,25 +27,8 @@ source(mainConfigFile)
 
 ## ---------
 
-## For extent calculations
-
-if( ! is.null(bathymetryDataLayerHR) ) {
-  
-  bathymetryDataLayerHR <- raster(bathymetryDataLayerHR)
-  bathymetryDataLayerHR <- aggregate(bathymetryDataLayerHR,2,mean,na.rm=T)
-  bathymetryDataLayerHR[bathymetryDataLayerHR <= maxDepth * (-1)] <- NA
-  bathymetryDataLayerHR[bathymetryDataLayerHR >= minDepth * (-1)] <- NA
-  bathymetryDataLayerHR[!is.na(bathymetryDataLayerHR)] <- 1
-  
-  bathymetryLayerFraction <- aggregate(bathymetryDataLayerHR,res(raster(bathymetryDataLayer))[1] / res(bathymetryDataLayerHR)[1] ,sum,na.rm=T)
-  bathymetryLayerFraction <- bathymetryLayerFraction / cellStats(bathymetryLayerFraction, max, na.rm=T)
-  bathymetryLayerFraction <- raster::resample(bathymetryLayerFraction,raster(bathymetryDataLayer), method="ngb")
-  
-}
-
-## ---------
-
-dataRecords <- read.csv(dataRecordsFile)
+dataRecords <- loadRData(dataRecordsFile)
+dataRecords <- dataRecords[,c("acceptedname","decimalLongitude","decimalLatitude")]
 dataRecords <- dataRecords[complete.cases(dataRecords),]
 colnames(dataRecords) <- c("speciesName","Lon","Lat")
 speciesList <- sort(unique(dataRecords$speciesName))
@@ -74,7 +57,7 @@ modelParallel <- foreach(species = speciesList, .export="monotonicity") %dopar% 
   ## ---------------------
   
   resultsDirectory <- paste0(mainResultsDirectory,"/",species,"/")
-  
+
   ## ---------------------
   
   if( ! dir.exists(resultsDirectory) ) { dir.create(resultsDirectory, recursive = TRUE) }
@@ -83,7 +66,7 @@ modelParallel <- foreach(species = speciesList, .export="monotonicity") %dopar% 
   if( ! dir.exists(paste0(resultsDirectory,"/Predictions/")) ) { dir.create(paste0(resultsDirectory,"/Predictions/"), recursive = TRUE) }
   if( ! dir.exists(paste0(resultsDirectory,"/Figures/")) ) { dir.create(paste0(resultsDirectory,"/Figures/"), recursive = TRUE) }
   if( ! dir.exists(paste0(resultsDirectory,"/Data/")) ) { dir.create(paste0(resultsDirectory,"/Data/"), recursive = TRUE) }
-  
+
   ## ---------------------
   
   occurrenceRecords <- dataRecords[which(dataRecords$speciesName == species),]
@@ -93,46 +76,40 @@ modelParallel <- foreach(species = speciesList, .export="monotonicity") %dopar% 
   ## ---------------------
   
   if( ! is.null(depthTraits) ) {
-    
     depthTraitsData <- read.csv(depthTraits)
     depthTraitsData <- depthTraitsData[depthTraitsData$speciesName == species,]
-    
     minDepth <- mean(depthTraitsData$DepthMin,na.rm=T)
     maxDepth <- mean(depthTraitsData$DepthMax,na.rm=T)
     
     if( is.na(minDepth) | is.na(maxDepth) ) {
-      
       depthTraitsData <- read.csv(depthTraits)
       depthTraitsData <- depthTraitsData[which(grepl(strsplit(species, " ")[[1]][1],depthTraitsData$speciesName)),]
       minDepth <- mean(depthTraitsData$DepthMin,na.rm=T)
       maxDepth <- mean(depthTraitsData$DepthMax,na.rm=T)
-      
     }
     
     if( is.na(minDepth) | is.na(maxDepth) ) { unlink(resultsDirectory, recursive=TRUE); occurrenceRecords <- data.frame() }
-
     if( ! is.na(minDepth) & ! is.na(maxDepth) ) { 
       if( abs(diff(c(minDepth,maxDepth))) < 25 ) { minDepth <- ifelse((minDepth - 25) < 0 , 0 , minDepth - 25); maxDepth <- maxDepth + maxDepth + 25 }
     }
-    
   }
   
   ## ---------------------
   # Environmental layers
   
   if( nrow(occurrenceRecords) >= minOccurrenceRecords ) { 
+        
+      rasterLayers <- list.files(climateLayersDirectory,pattern=dataLayersFileType,full.names = TRUE, recursive = TRUE)
+      rasterLayers <- rasterLayers[!grepl("@",rasterLayers)]
+      rasterLayers <- stack(rasterLayers[as.vector(sapply(dataLayers,function(x) { which( grepl(x,rasterLayers)) } ))])
+      rasterLayers <- processLayers(rasterLayers,occurrenceRecords,regionBuffer, minDepth=ifelse( is.null(minDepth), "NULL" , ifelse(minDepth-minDepthBuffer < 0 , 0 , minDepth-minDepthBuffer)) , maxDepth=ifelse( is.null(maxDepth), "NULL" , maxDepth+maxDepthBuffer),intertidal)
+      names(rasterLayers) <- dataLayersName
+      rasterLayers <- correctLayer(rasterLayers,"Salinity","he",28,28)
     
-    rasterLayers <- list.files(climateLayersDirectory,pattern=dataLayersFileType,full.names = TRUE, recursive = TRUE)
-    rasterLayers <- rasterLayers[!grepl("@",rasterLayers)]
-    rasterLayers <- stack(rasterLayers[as.vector(sapply(dataLayers,function(x) { which( grepl(x,rasterLayers)) } ))])
-    rasterLayers <- processLayers(rasterLayers,occurrenceRecords,regionBuffer, minDepth=ifelse( is.null(minDepth), "NULL" , ifelse(minDepth-minDepthBuffer < 0 , 0 , minDepth-minDepthBuffer)) , maxDepth=ifelse( is.null(maxDepth), "NULL" , maxDepth+maxDepthBuffer),intertidal)
-    names(rasterLayers) <- dataLayersName
-    rasterLayers <- correctLayer(rasterLayers,"Salinity","he",28,28)
-    
-    worldMap <- ne_countries(scale = "medium", returnclass = "sf")
-    
-    source("1. prepareRecords.R", local = TRUE)
-    
+      worldMap <- ne_countries(scale = "medium", returnclass = "sf")
+      
+      source("1. prepareRecords.R", local = TRUE)
+      
   }
   
   ## ---------------------
@@ -145,11 +122,13 @@ modelParallel <- foreach(species = speciesList, .export="monotonicity") %dopar% 
   
   ## ---------------------
   
+  if( nrow(occurrenceRecords) < minOccurrenceRecords ) { unlink(resultsDirectory, recursive=TRUE) }
+  
   gc(reset=TRUE)
   return(NULL)
   
   ## ---------------------
-  
+
 }
 
 stopCluster(cl); rm(cl)
@@ -159,13 +138,13 @@ gc(reset=TRUE)
 ## ------------------------------------------------------------------
 ## Predict species
 
-overwrite <- TRUE
+overwrite <- FALSE
 speciesList <- sort(unique(dataRecords$speciesName))
 speciesToPredict <- character(0)
 for( species in list.files(mainResultsDirectory) ) {
   if( sum(sapply(algorithms, function(x) { length(list.files( paste0(mainResultsDirectory,"/",species,"/Models/"), pattern = paste0(x,".RData"), recursive=T)) } )) == length(algorithms) )  { speciesToPredict <- c(speciesToPredict,species) }
   if( ! overwrite) { 
-    if( sum(sapply(c("Baseline","Reclass","Global"), function(x) { length(list.files( paste0(mainResultsDirectory,"/",species,"/Predictions/",scenariosToPredict[length(scenariosToPredict)],"/"), pattern = x, recursive=T)) > 1 } )) >= 2 )  { speciesToPredict <- speciesToPredict[which(speciesToPredict != species)] }
+    if( sum(sapply(c("ensemble","Reclass","Global"), function(x) { length(list.files( paste0(mainResultsDirectory,"/",species,"/Predictions/",scenariosToPredict[length(scenariosToPredict)],"/"), pattern = x, recursive=T)) > 1 } )) >= 2 )  { speciesToPredict <- speciesToPredict[which(speciesToPredict != species)] }
   }
 }
 length(speciesToPredict)
@@ -182,21 +161,32 @@ predictParallel <- foreach(species = speciesToPredict ) %dopar% {
   
   resultsDirectory <- paste0(mainResultsDirectory,"/",species,"/")
   modelData <- loadRData(paste0(resultsDirectory,"/Data/","modelData.RData"))
-  
+
   if( ! is.null(depthTraits) ) {
     depthTraitsData <- read.csv(depthTraits)
     depthTraitsData <- depthTraitsData[depthTraitsData$speciesName == species,]
-    minDepth <- mean(depthTraitsData$DepthMin)
-    maxDepth <- mean(depthTraitsData$DepthMax)
-    if( abs(diff(c(minDepth,maxDepth))) < 25 ) { minDepth <- ifelse((minDepth - 25) < 0 , 0 , minDepth - 25); maxDepth <- maxDepth + maxDepth + 25 }
+    minDepth <- mean(depthTraitsData$DepthMin,na.rm=T)
+    maxDepth <- mean(depthTraitsData$DepthMax,na.rm=T)
+    
+    if( is.na(minDepth) | is.na(maxDepth) ) {
+      depthTraitsData <- read.csv(depthTraits)
+      depthTraitsData <- depthTraitsData[which(grepl(strsplit(species, " ")[[1]][1],depthTraitsData$speciesName)),]
+      minDepth <- mean(depthTraitsData$DepthMin,na.rm=T)
+      maxDepth <- mean(depthTraitsData$DepthMax,na.rm=T)
+    }
+    
+    if( is.na(minDepth) | is.na(maxDepth) ) { unlink(resultsDirectory, recursive=TRUE); occurrenceRecords <- data.frame() }
+    if( ! is.na(minDepth) & ! is.na(maxDepth) ) { 
+      if( abs(diff(c(minDepth,maxDepth))) < 25 ) { minDepth <- ifelse((minDepth - 25) < 0 , 0 , minDepth - 25); maxDepth <- maxDepth + maxDepth + 25 }
+    }
   }
   
   ## ---------------------
-  
+
   source("3. modelPredict.R", local = TRUE)
-  
+    
   ## ---------------------
-  
+
   gc(reset=TRUE)
   return(NULL)
   
@@ -209,11 +199,12 @@ gc(reset=TRUE)
 ## ------------------------------------------------------------------
 ## Estimate range shifts
 
+overwrite <- TRUE
 speciesList <- sort(unique(dataRecords$speciesName))
 speciesToPredict <- character(0)
 for( species in list.files(mainResultsDirectory) ) {
-  if( overwrite & sum(sapply(c("Baseline","Reclass","Global"), function(x) { length(list.files( paste0(mainResultsDirectory,"/",species,"/Predictions/",scenariosToPredict[length(scenariosToPredict)],"/"), pattern = x, recursive=T)) > 1 } )) >= 2 )  { speciesToPredict <- c(speciesToPredict,species) }
-  if( ! overwrite & sum(sapply(c("Baseline","Reclass","Global"), function(x) { length(list.files( paste0(mainResultsDirectory,"/",species,"/Predictions/",scenariosToPredict[length(scenariosToPredict)],"/"), pattern = x, recursive=T)) > 1 } )) >= 2 )  { speciesToPredict <- c(speciesToPredict,species) }
+  if( sum(sapply(c("ensemble","Reclass","Global"), function(x) { length(list.files( paste0(mainResultsDirectory,"/",species,"/Predictions/",scenariosToPredict[length(scenariosToPredict)],"/"), pattern = x, recursive=T)) > 1 } )) >= 2 )  { speciesToPredict <- c(speciesToPredict,species) }
+  if( ! overwrite & sum(sapply(c("Gain","Loss","Refugia"), function(x) { length(list.files( paste0(mainResultsDirectory,"/",species,"/Predictions/",scenariosToPredict[length(scenariosToPredict)],"/"), pattern = x, recursive=T)) > 0 })) >= 3 ) { speciesToPredict <- speciesToPredict[-which(speciesToPredict == species)] }
 }
 length(speciesToPredict)
 
@@ -232,18 +223,26 @@ estimateParallel <- foreach(species = speciesToPredict) %dopar% {
   occurrenceRecords <- modelData@coords[modelData@pa == 1,]
   
   if( ! is.null(depthTraits) ) {
-    
     depthTraitsData <- read.csv(depthTraits)
     depthTraitsData <- depthTraitsData[depthTraitsData$speciesName == species,]
-    minDepth <- mean(depthTraitsData$DepthMin)
-    maxDepth <- mean(depthTraitsData$DepthMax)
+    minDepth <- mean(depthTraitsData$DepthMin,na.rm=T)
+    maxDepth <- mean(depthTraitsData$DepthMax,na.rm=T)
     
-    if( abs(diff(c(minDepth,maxDepth))) < 25 ) { minDepth <- ifelse((minDepth - 25) < 0 , 0 , minDepth - 25); maxDepth <- maxDepth + maxDepth + 25 }
+    if( is.na(minDepth) | is.na(maxDepth) ) {
+      depthTraitsData <- read.csv(depthTraits)
+      depthTraitsData <- depthTraitsData[which(grepl(strsplit(species, " ")[[1]][1],depthTraitsData$speciesName)),]
+      minDepth <- mean(depthTraitsData$DepthMin,na.rm=T)
+      maxDepth <- mean(depthTraitsData$DepthMax,na.rm=T)
+    }
     
+    if( is.na(minDepth) | is.na(maxDepth) ) { unlink(resultsDirectory, recursive=TRUE); occurrenceRecords <- data.frame() }
+    if( ! is.na(minDepth) & ! is.na(maxDepth) ) { 
+      if( abs(diff(c(minDepth,maxDepth))) < 25 ) { minDepth <- ifelse((minDepth - 25) < 0 , 0 , minDepth - 25); maxDepth <- maxDepth + maxDepth + 25 }
+    }
   }
-  
+
   ## ---------------------
-  
+
   source("4. rangeShiftEstimates.R", local = TRUE)
   
   ## ---------------------
@@ -255,7 +254,6 @@ estimateParallel <- foreach(species = speciesToPredict) %dopar% {
 stopCluster(cl); rm(cl)
 closeAllConnections()
 gc(reset=TRUE)
-
 
 ## -----------------------------------------
 ## -----------------------------------------
@@ -270,7 +268,7 @@ if(! dir.exists(paste0(stackResultsFolder,"/Maps/perSpecies"))) { dir.create(pas
 
 speciesPredicted <- character(0)
 for( species in list.files(mainResultsDirectory) ) {
-  if( length(list.files( paste0(mainResultsDirectory,"/",species,"/SummaryModels/"), pattern = "rangeShiftEstimates" , recursive=T)) > 0 )  { speciesPredicted <- c(speciesPredicted,species) }
+  if( length(list.files( paste0(mainResultsDirectory,"/",species,"/SummaryModels/"), pattern = "rangeShiftEstimates" , recursive=T)) >= length(scenariosToPredict[scenariosToPredict != "Baseline"]) )  { speciesPredicted <- c(speciesPredicted,species) }
 }
 length(speciesPredicted)
 
@@ -324,16 +322,15 @@ rangeShiftsEstimatesAll[ rangeShiftsEstimatesAll == Inf] <- NA
 
 ## ----------
 
-names(performanceAll)
-speciesDiscardedNames <- speciesPredicted[which(performanceAll$auc.ensemble < 0.75)]
-speciesPredicted <- speciesPredicted[which(performanceAll$auc.ensemble >= 0.75)]
+speciesDiscardedNames <- speciesPredicted[which(performanceAll$boyce.Ensemble < 0 )]
+speciesPredicted <- speciesPredicted[which(performanceAll$boyce.Ensemble >= 0 )]
 
 write.csv(data.frame(species=speciesDiscardedNames), file=paste0(stackResultsFolder,"/speciesDiscarded.csv"), row.names = FALSE)
 write.csv(data.frame(species=speciesPredicted), file=paste0(stackResultsFolder,"/speciesPredictedList.csv"), row.names = FALSE)
 
 ## ---------
 
-taxaCrossChecker <- "Alismatales"
+taxaCrossChecker <- "Cnidaria" # "Alismatales"
 source("Dependencies/getWormsInfo.R")
 write.csv(speciesListWorms, file=paste0(stackResultsFolder,"/speciesListWorms.csv"), row.names = FALSE)
 
@@ -348,6 +345,7 @@ write.csv(rangeShiftsEstimatesAll[which(rangeShiftsEstimatesAll$name %in% specie
 ## -----------------------------------------
 ## -----------------------------------------
 # Summary of range extent and overlap between taxa (e.g., species)
+# To be revised
 
 speciesPredicted <- read.csv(paste0(stackResultsFolder,"/speciesPredictedList.csv"))[,1]
 taxaLevel <- "Genus" # Species Genus
@@ -358,9 +356,9 @@ source("5. summaryRangeExtentOverlap.R")
 ## -----------------------------------------
 # Summary presence-absence of species in polygon-Regions
 
-resultsName <- "MarineRealm" # MarineEcoRegion MarineRealm
+resultsName <- "MarineEcoRegion" # MarineEcoRegion MarineRealm
 polygonPath <- "Dependencies/Data/Shapefiles/marine_ecoregions.shp"
-polygonFeature <- "REALM" # ECOREGION PROVINCE REALM
+polygonFeature <- "ECOREGION" # ECOREGION PROVINCE REALM
 
 resultsName <- "EEZ"
 polygon <- load("Dependences/Data/Shapefiles/EEZGlobal.RData")
@@ -378,6 +376,28 @@ source("7. stackingMultiplePredictions.R")
 ## -----------------------------------------
 # Summary stack predictions
 
+if( is.null(bathymetryDataLayerHR) ) { 
+  
+  bathymetryLayerFraction <- raster(bathymetryDataLayer)
+  bathymetryLayerFraction[!is.na(bathymetryLayerFraction)] <- 1
+
+}
+
+if( ! is.null(bathymetryDataLayerHR) ) {
+  
+  bathymetryDataLayerHR <- raster(bathymetryDataLayerHR)
+  bathymetryDataLayerHR <- aggregate(bathymetryDataLayerHR,2,mean,na.rm=T)
+  bathymetryDataLayerHR[bathymetryDataLayerHR <= maxDepth * (-1)] <- NA
+  bathymetryDataLayerHR[bathymetryDataLayerHR >= minDepth * (-1)] <- NA
+  bathymetryDataLayerHR[!is.na(bathymetryDataLayerHR)] <- 1
+  bathymetryLayerFraction <- aggregate(bathymetryDataLayerHR,res(raster(bathymetryDataLayer))[1] / res(bathymetryDataLayerHR)[1] ,sum,na.rm=T)
+  bathymetryLayerFraction <- bathymetryLayerFraction / cellStats(bathymetryLayerFraction, max, na.rm=T)
+  bathymetryLayerFraction <- raster::resample(bathymetryLayerFraction,raster(bathymetryDataLayer), method="ngb")
+  
+}
+
+## ---------------
+
 resultsName <- "Global" # MarineRealm MarineEcoRegion Global
 polygon <- NULL
 polygonFeature <- NULL # NULL ECOREGION PROVINCE REALM
@@ -386,14 +406,15 @@ resultsName <- "MarineRealm" # MarineRealm MarineEcoRegion
 polygonPath <- "Dependencies/Data/Shapefiles/marine_ecoregions.shp"
 polygonFeature <- "REALM" # NULL ECOREGION PROVINCE REALM
 
-resultsName <- "EEZ" # MarineRealm MarineEcoRegion
-polygon <- load("/Volumes/StingRay/Dropbox/Data/Spatial information/Shapefiles/EEZ/EEZGlobal.RData")
-polygonFeature <- "EEZ" # EEZ
+resultsName <- "EEZOceans" # EEZ EEZOceans
+polygonPath <-"Dependencies/Data/Shapefiles/EEZOceans.shp" # EEZ.shp EEZOceans.shp
+polygonFeature <- "EEZOceans" # EEZ EEZOceans
 
 source("8. summaryStackingMultiplePredictions.R")
 
-## ---------------
-# Per latitude
+## -----------------------------------------
+## -----------------------------------------
+# Summary stack predictions Per latitude
 
 source("8. summaryStackingMultiplePredictionsLat.R")
 

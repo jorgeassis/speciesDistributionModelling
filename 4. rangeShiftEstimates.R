@@ -39,11 +39,30 @@ for( scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
 
   scenarioPredictionFile <- gsub("Baseline",scenario,baselinePredictionFile)
   scenarioPrediction <- loadRData(scenarioPredictionFile)
-  
-  if( ! 1 %in% getValues(scenarioPrediction) ) { next }
 
   rangeShifts <- Gain <- Loss <- Refugia <- shape
   
+  if( ! 1 %in% getValues(scenarioPrediction) ) { 
+    
+    Loss <- baselinePrediction
+    rangeShifts <- baselinePrediction
+    rangeShifts[rangeShifts == 1] <- -1
+    
+    save( Gain , file = gsub("ensemble","ensembleGain",scenarioPredictionFile), compress=TRUE, compression_level=6)
+    save( Loss , file = gsub("ensemble","ensembleLoss",scenarioPredictionFile), compress=TRUE, compression_level=6)
+    save( Refugia , file = gsub("ensemble","ensembleRefugia",scenarioPredictionFile) , compress=TRUE, compression_level=6)
+    save( rangeShifts , file = gsub("ensemble","ensembleRangeShifts",scenarioPredictionFile) , compress=TRUE, compression_level=6)
+    
+    save( shape , file=gsub("ensemble","ensembleGainDistance",scenarioPredictionFile) , compress=TRUE, compression_level=6)
+    save( shape , file=gsub("ensemble","ensembleRefugiaDistance",scenarioPredictionFile) , compress=TRUE, compression_level=6)
+    
+    rangeShifts <- data.frame(LatShift = 0, distanceCentroidShift=0, distanceToRefugiaMean=0, distanceToRefugiaMax=0, distanceRangeGainMean=0, distanceRangeGainMax=0)
+    save( rangeShifts , file=paste0( resultsDirectory, "/SummaryModels/rangeShiftEstimates",ifelse( "Reachable" %in% exportType , "Reachable" , "unConstrained" ),scenario,".RData"))
+    
+    next
+    
+  }
+
   rangeShifts[Which(baselinePrediction == 0 , cells=T )] <- NA
   rangeShifts[Which(scenarioPrediction == 1 & baselinePrediction == 0 , cells=T )] <- 1
   rangeShifts[Which(scenarioPrediction == 0 & baselinePrediction == 1 , cells=T )] <- -1
@@ -80,20 +99,18 @@ for( scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
   coordsRefugiaPrediction <- xyFromCell(distRefugia,cellsRefugiaPrediction)
   
   cellsZeroDistance <- intersect(cellsbaselinePrediction,cellsRefugiaPrediction)
+  distRefugia[cellsZeroDistance] <- 0
+  
   cellsNonZeroDistance <- setdiff(cellsbaselinePrediction,cellsRefugiaPrediction)
   cellsNonZeroDistanceCalc <- numeric(length(cellsNonZeroDistance))
-
-  if( length(cellsNonZeroDistance) > 0) {
-    for( cell.i in 1:length(cellsNonZeroDistance)) {
-      
-      cell <- cellsNonZeroDistance[cell.i]
-      cellsNonZeroDistanceCalc[cell.i] <- min(spDistsN1(coordsRefugiaPrediction,xyFromCell(distRefugia,cell), longlat = TRUE))
-      
-    }
+  coordsRangeshifts <- xyFromCell(distRefugia,cellsNonZeroDistance)
+  
+  if( nrow(coordsRefugiaPrediction) > 0 & nrow(coordsRangeshifts) > 0) {
+    distanceCalc <- get.knnx( coordsRefugiaPrediction , matrix(coordsRangeshifts, ncol=2), k= 1 , algorithm="kd_tree" )
+    distanceCalc <- sapply(1:nrow(coordsRangeshifts), function(x) { d2km(distanceCalc$nn.dist[x], base.latitude = coordsRangeshifts[x,2]) })
+    distRefugia[cellsNonZeroDistance] <- distanceCalc
   }
-
-  distRefugia[cellsZeroDistance] <- 0
-  distRefugia[cellsNonZeroDistance] <- cellsNonZeroDistanceCalc
+  
   save( distRefugia , file=gsub("ensemble","ensembleRefugiaDistance",scenarioPredictionFile) , compress=TRUE, compression_level=6)
   
   distRefugia[distRefugia == 0 ] <- NA
@@ -107,16 +124,14 @@ for( scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
   
   coordsBaselinePrediction <- xyFromCell(distExpansion,cellsbaselinePrediction)
   coordsGainPrediction <- xyFromCell(distExpansion,cellsGainPrediction)
-  cellsNonZeroDistanceCalc <- numeric(nrow(coordsGainPrediction))
   
-  for( cell.i in 1:nrow(coordsGainPrediction)) {
-    
-    if(nrow(coordsGainPrediction) == 0 ) { break}
-    cellsNonZeroDistanceCalc[cell.i] <- min(spDistsN1(coordsBaselinePrediction,coordsGainPrediction[cell.i,], longlat = TRUE))
-    
+  if( nrow(coordsBaselinePrediction) > 0 & nrow(coordsGainPrediction) > 0) {
+
+    distanceCalc <- get.knnx( coordsBaselinePrediction , matrix(coordsGainPrediction, ncol=2), k= 1 , algorithm="kd_tree" )
+    distanceCalc <- sapply(1:nrow(coordsGainPrediction), function(x) { d2km(distanceCalc$nn.dist[x], base.latitude = coordsGainPrediction[x,2]) })
+    distExpansion[cellsGainPrediction] <- distanceCalc
   }
   
-  distExpansion[cellsGainPrediction] <- cellsNonZeroDistanceCalc
   save( distExpansion , file=gsub("ensemble","ensembleGainDistance",scenarioPredictionFile) , compress=TRUE, compression_level=6)
   
   distExpansion[distExpansion == 0 ] <- NA

@@ -7,7 +7,9 @@
 # ------------------------------------------------------------------------------------
 
 packages.to.use <- c(  
-      "credentials"
+  "datawizard"
+  ,"DescTools"
+      ,"credentials"
       ,"SDMtune"
       ,"modEvA"
       ,"blockCV"
@@ -43,6 +45,8 @@ packages.to.use <- c(
       , "remotes"
       ,"leaflet"
       , "monmlp"
+      , "okara"
+      , "FNN"
       #,"RStoolbox" 
       )
 
@@ -52,7 +56,8 @@ for(package in packages.to.use) {
   print(package)
   
  # if( ! package %in% rownames(installed.packages()) ) { stop("From folder !") }
-  
+
+  if( ! package %in% rownames(installed.packages()) & package == "okara" ) { remotes::install_github("omerkara/okara") }
   if( ! package %in% rownames(installed.packages()) & package == "RStoolbox" ) { install_github("bleutner/RStoolbox") }
   if( ! package %in% rownames(installed.packages()) & package == "USE" ) { devtools::install_github("danddr/USE") }
   if( ! package %in% rownames(installed.packages()) & package == "SDMTools" ) { install_version("SDMTools", "1.1-221") }
@@ -72,6 +77,34 @@ exportPackages <- function() {
   makeRepo(packages.to.use, path = "Dependencies/Packages/", type = "source", Rversion = paste0(R.Version()$major,".",R.Version()$minor),quiet=TRUE)
   cat("Packages export:", "TRUE","\n")
   
+}
+
+# ---------------------
+
+interleave <- function(x, y)
+{
+  m <- length(x)
+  n <- length(y)
+  xi <- yi <- 1
+  len <- m + n
+  err <- len %/% 2
+  res <- vector()
+  for (i in 1:len)
+  {
+    err <- err - m
+    if (err < 0)
+    {
+      
+      res[i] <- x[xi]
+      xi <- xi + 1
+      err <- err + len
+    } else
+    {
+      res[i] <- y[yi]
+      yi <- yi + 1
+    }
+  }
+  res
 }
 
 # ---------------------
@@ -732,6 +765,8 @@ dropNoVariationLayers <- function(rasterLayers,records) {
 
 relocateNACoords <- function(occurrenceRecords,rasterLayers,relocateType,relocateSpeciesDistance,relocateSpeciesDepth) {
   
+  occurrenceRecords.bk <- occurrenceRecords
+  
   set.seed(42)
   
   if(relocateType == "nonDistance") {
@@ -769,7 +804,7 @@ relocateNACoords <- function(occurrenceRecords,rasterLayers,relocateType,relocat
     if( ! relocateSpeciesDepth ) { shape <- subset(rasterLayers,1) } 
     
     to.relocate <- unique(which(is.na(raster::extract(shape,occurrenceRecords))))
-    coordinates.to.relocate <- as.matrix(occurrenceRecords[to.relocate,],ncol=2)
+    coordinates.to.relocate <- matrix(occurrenceRecords[c(1,2),],ncol=2)
     
     if( nrow(coordinates.to.relocate) > 0 ) { 
       
@@ -829,6 +864,9 @@ relocateNACoords <- function(occurrenceRecords,rasterLayers,relocateType,relocat
   
   if( length(toRemove) > 0 ) { occurrenceRecords <- occurrenceRecords[-toRemove,] }
   
+  if( nrow(occurrenceRecords) == 0 ) { occurrenceRecords <-occurrenceRecords.bk }
+  
+
   return( occurrenceRecords )
   
 }
@@ -1063,9 +1101,11 @@ generatePseudoAbsences <- function(occurrenceRecords,rasterLayers,paType) {
   
   biasSurface <- NULL
   occurrenceRecords <- as.data.frame(occurrenceRecords)
+  
   if( paType == "random" ) {
+
     pseudoAbsences <- xyFromCell( subset(rasterLayers,1) , Which( !is.na(subset(rasterLayers,1) ) , cells=T) )
-    
+  
     if(paRemoveOverOccurrence) {
       
       occurrenceRecords.sp <- occurrenceRecords
@@ -1077,9 +1117,7 @@ generatePseudoAbsences <- function(occurrenceRecords,rasterLayers,paType) {
       coordinates(pseudoAbsences.sp) <- ~x+y
       crs(pseudoAbsences.sp) <- crs(rasterLayers)
       pseudoAbsences <- pseudoAbsences[which(is.na(over(pseudoAbsences.sp,occurrenceRecords.sp))),]
-      
     }
-    
 
   }
   

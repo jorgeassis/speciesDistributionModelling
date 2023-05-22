@@ -22,7 +22,7 @@ for(scenario in scenariosToPredict ) {
   # rasterOptions(tmpdir=tempFolder)
   
   sFiles <- list.files(mainResultsDirectory,pattern="RData",full.names = TRUE,recursive=TRUE)
-  
+
   sFiles <- sFiles[grepl("Predictions",sFiles)]
   sFiles <- sFiles[grepl("ensemble",sFiles)]
   sFiles <- sFiles[grepl("Reclass",sFiles)]
@@ -39,8 +39,7 @@ for(scenario in scenariosToPredict ) {
   sFiles <- sFiles[!grepl("RangeShifts",sFiles)]
   sFiles <- sFiles[!grepl("ensembleSD",sFiles)]
 
-    
-  sFiles <- sFiles[unlist(sapply(speciesPredicted,function(x) { which(unlist(grepl(paste0(x,"/Predictions"),sFiles))) } ))]
+  sFiles <- sFiles[unlist(sapply(speciesPredicted,function(x) { agrep(x, sFiles) } ))]
   sFiles <- unique(sFiles)
   
   if(length(sFiles) > length(speciesPredicted)) { stop("Error :: 333")}
@@ -89,8 +88,7 @@ for(scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
   for(trait in c("Gain","Loss","Refugia")) {
 
     sFiles <- list.files(mainResultsDirectory,pattern="RData",full.names = TRUE,recursive=TRUE)
-    sFiles <- sFiles[unlist(sapply(speciesPredicted,function(x) { which(unlist(grepl(x,sFiles))) } ))]
-    
+
     sFiles <- sFiles[grepl("Predictions",sFiles)]
     sFiles <- sFiles[grepl("ensemble",sFiles)]
     sFiles <- sFiles[grepl("Reclass",sFiles)]
@@ -103,6 +101,7 @@ for(scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
     sFiles <- sFiles[grepl(scenario,sFiles)]
     sFiles <- sFiles[grepl("Global.RData",sFiles)]
 
+    sFiles <- sFiles[unlist(sapply(speciesPredicted,function(x) { agrep(x, sFiles) } ))]
     sFiles <- unique(sFiles)
     
     if(length(sFiles) > length(speciesPredicted)) { stop("Error :: 334")}
@@ -177,9 +176,12 @@ for(scenario in scenariosToPredict ) {
 
   sFiles <- list.files(mainResultsDirectory,pattern="RData",full.names = TRUE,recursive=TRUE)
   
-  sFiles <- sFiles[grepl("Predictions",sFiles)]
-  sFiles <- sFiles[grepl("ensembleSDGlobal",sFiles)]
+  sFiles <- sFiles[ grepl("Predictions",sFiles) ]
+  sFiles <- sFiles[ grepl("ensembleSDGlobal",sFiles) ]
   sFiles <- sFiles[ grepl(scenario,sFiles) ]
+  
+  sFiles <- sFiles[unlist(sapply(speciesPredicted,function(x) { agrep(x, sFiles) } ))]
+  sFiles <- unique(sFiles)
   
   uncertainty <- loadRData(sFiles[1])
   

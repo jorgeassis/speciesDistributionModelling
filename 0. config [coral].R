@@ -13,7 +13,7 @@
 ## ---------------------------------------------------------------------
 ## ---------------------------------------------------------------------
 
-nCores <- 20
+nCores <- 12
 
 mainResultsDirectory <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Results/"
 stackResultsFolder <-"/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/ResultsStacked/"
@@ -21,20 +21,20 @@ stackResultsFolder <-"/media/Hammerhead/Data/Distribution Models/Global distribu
 climateLayersDirectory <-"/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Climate/Baseline/"
 dataLayersFileType <- "tif"
 
-dataRecordsFile <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Records/databaseCWC.csv"
+dataRecordsFile <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Records/databasePrunnedGeograph.RData"
 dataRecordsNames <- c("Lon","Lat")
 
-dataLayers <- c("DissolvedMolecularOxygen BenthicMean Ltmin","OceanTemperature BenthicMean LtMax","OceanTemperature BenthicMean LtMin","Salinity BenthicMean Ltmin","pH BenthicMean Ltmin","Slope BenthicMean","TotalPhytoplankton BenthicMean Ltmin","TerrainRuggednessIndex BenthicMean")
-dataLayersName <- c("Oxygen","TempMax","TempMin","Salinity","pH","Slope","Productivity","TerrainRug") # 
-monotonicity <- c(+1,-1,+1,+1,+1,+1,+1,+1)
+dataLayers <- c("SeaWaterSpeed BenthicMean Ltmin.tif","DissolvedMolecularOxygen BenthicMean Ltmin","OceanTemperature BenthicMean LtMax","OceanTemperature BenthicMean LtMin","Salinity BenthicMean Ltmin","pH BenthicMean Ltmin","Slope BenthicMean","TotalPhytoplankton BenthicMean Ltmin","TerrainRuggednessIndex BenthicMean")
+dataLayersName <- c("Currents","Oxygen","TempMax","TempMin","Salinity","pH","Slope","Productivity","TerrainRug") # 
+monotonicity <- c(+1,+1,-1,+1,+1,+1,+1,+1,+1)
 monotonicity <- setNames(data.frame(t(monotonicity)), dataLayersName)
 monotonicity
 
 ## -------------------
 
 bathymetryDataLayer <- "Dependencies/Data/Rasters/BathymetryDepthMinRes005.tif"
-bathymetryDataLayerHR <- "../GEBCO Bathymetry Global.tif" # NULL
-intertidal <-  "Dependencies/Data/Rasters/coastLineRes005.tif"
+bathymetryDataLayerHR <- NULL # "../GEBCO Bathymetry Global.tif" # NULL
+intertidal <- NULL # "Dependencies/Data/Rasters/coastLineRes005.tif"
 
 depthTraits <- "/media/Hammerhead/Data/Distribution Models/Global distribution of cold water corals/Data/Records/databaseCWCTraits.csv"
 minDepth <- NULL 

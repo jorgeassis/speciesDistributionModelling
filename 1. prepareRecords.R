@@ -45,7 +45,9 @@ dev.off()
 save(spatialAutocorr,file=paste0(resultsDirectory,"/Data/","spatialAutocorr.RData"))
 
 # Relocate records to closest cell (those falling on land / unlikely depth)
-occurrenceRecords <- relocateNACoords(occurrenceRecords,rasterLayers,relocateType,relocateSpeciesDistance,relocateSpeciesDepth)
+if( nrow(occurrenceRecords) > 1) {
+  occurrenceRecords <- relocateNACoords(occurrenceRecords,rasterLayers,relocateType,relocateSpeciesDistance,relocateSpeciesDepth)
+}
 
 # Generate Pseudo-absences
 pseudoAbsences <- generatePseudoAbsences(occurrenceRecords,rasterLayers,paType)

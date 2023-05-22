@@ -1,0 +1,22 @@
+---
+title: "Literature support"
+output: html_document
+date: '2022-05-30'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------
+
+## Colinearity
+
+A VIF greater than 10 is a signal that the model has a collinearity problem.
+Collinearity causes instability in parameter estimation in regression-type models. 
+
+Dormann, C. F. et al. 2012. Collinearity: A review of methods to Deal with it and a simulation study evaluating their performance. Ecography 35: 001-020.;
+
+Naimi, B., Hamm, N.A.S., Groen, T.A., Skidmore, A.K., and Toxopeus, A.G. 2014. Where is positional uncertainty a problem for species distribution modelling?, Ecography 37 (2): 191-203.
+
+------------------------------------

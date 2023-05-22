@@ -36,6 +36,8 @@ worldMap <- spTransform(worldMap, CRSobj = projection)
 worldMap <- gBuffer(worldMap, byid=TRUE, width=0.001)
 worldMap <- crop(worldMap, as(bb, "Spatial"))
 
+themeWorldMap <- "dark"
+
 themeMap <- 
   theme_minimal() +
   theme(
@@ -58,10 +60,7 @@ themeMap <-
 
 mainGlobalMap <- ggplot() + geom_sf(data = st_as_sf(ne_countries(scale = 10, returnclass = "sp")), color = "#CDCDCD", fill = "#CDCDCD", size=0.1) + themeMap
 
-mainGlobalMapEqual <- ggplot() + 
-  geom_polygon(data = worldMap, aes(x = long, y = lat, group = group), fill="#CDCDCD", colour = "#CDCDCD" , size=0.1 ) +
-  # coord_sf(xlim = c(-16808016, 16927051), ylim = c(-6525155,6242353), expand = FALSE) + 
-  themeMapEqual
+mainGlobalMapEqual <- ggplot() + themeMapEqual
 
 ## ------------------------------------------------------------------------------
 ## ------------------------------------------------------------------------------
@@ -177,14 +176,9 @@ files <- files[!grepl("extinction",files)]
 files <- files[!grepl("Changes",files)] 
 
 autoLegend <- FALSE
+autoLegendValues <- data.frame()
 
-cl <- parallel::makeCluster(10)
-registerDoParallel(cl)
-
-mappingParallel <- foreach(m = 1:length(files) ) %dopar% {
-  
-  source(mainfunctionsFile, local = TRUE)
-  source(mainConfigFile, local = TRUE)
+for(m in 1:length(files) ) {
   
   ## ---------------------
   
@@ -208,9 +202,23 @@ mappingParallel <- foreach(m = 1:length(files) ) %dopar% {
     rasterMapDF <- rasterMapDF[rasterMapDF$val != 0,]
   }
   
-  rasterMapDF <- data.frame(rasterMapDF,hex=apply(rasterMapDF[,1:2],1,function(x) { h3js::h3_geo_to_h3(x[[2]], x[[1]], res = resolutionH3) } ))
-  rasterMapDF <- data.frame(hex=unique(rasterMapDF$hex),val=sapply(unique(rasterMapDF$hex),function(x) { mean(rasterMapDF[rasterMapDF$hex == x , "val"],na.rm=T) } ))
-  rasterMapDF.polygons <- h3jsr::cell_to_polygon(input = rasterMapDF$hex, simple = FALSE)
+  cl <- makeCluster( detectCores() / 2 )
+  clusterExport(cl, c("resolutionH3","rasterMapDF") )
+  hexAddress <- parApply(cl, data.frame(rasterMapDF), 1, function(x) { h3js::h3_geo_to_h3(x[[2]], x[[1]], res = resolutionH3) } )
+  hexAddressHexagon <- parLapply(cl, unique(hexAddress), function(x) { mean(rasterMapDF[rasterMapDF$hex == x , "val"],na.rm=T) } )
+  stopCluster(cl) 
+
+  rasterMapDF <- data.frame(rasterMapDF,hex=hexAddress)
+  
+  cl <- makeCluster( detectCores() / 2 )
+  clusterExport(cl, c("resolutionH3","rasterMapDF") )
+  hexAddressHexagon <- parLapply(cl, unique(hexAddress), function(x) { mean(rasterMapDF[rasterMapDF$hex == x , "val"],na.rm=T) } )
+  stopCluster(cl)
+  closeAllConnections()
+  
+  rasterMapDF <- data.frame(hex=unique(rasterMapDF$hex),val=unlist(hexAddressHexagon))
+  rasterMapDF.polygons <- h3jsr::cell_to_polygon(input =rasterMapDF$hex, simple = FALSE)
+  
   rasterMapDF.polygons$hex <- as.character(rasterMapDF$hex)
   rasterMapDF.polygons$value <- as.numeric(as.character(rasterMapDF$val))
   rasterMapDF.polygons <- correctDateLineMap(rasterMapDF.polygons)
@@ -218,38 +226,18 @@ mappingParallel <- foreach(m = 1:length(files) ) %dopar% {
   minLegend <- min(rasterMapDF.polygons$value)
   maxLegend <- max(rasterMapDF.polygons$value)
   
-  autoLegendDF <- data.frame(mapName=mapName,minLegend=minLegend,maxLegend=maxLegend)
+  autoLegendValues <- rbind(autoLegendValues,data.frame(mapName=mapName,minLegend=minLegend,maxLegend=maxLegend))
     
   if( ! autoLegend ) {
-    
+
+    minLegend <- round(min(autoLegendValues[which(grepl(mapName,autoLegendValues$mapName)),2:3]))
+    maxLegend <- round(max(autoLegendValues[which(grepl(mapName,autoLegendValues$mapName)),2:3]))
+
     if( grepl("Uncertainty", mapName ) ) {
       minLegend <- 0
       maxLegend <- 1
     }
-    if( grepl("Gain", mapName ) ) {
-      minLegend <- 0
-      maxLegend <- 14
-    }
-    if( grepl("Loss", mapName ) ) {
-      minLegend <- 0
-      maxLegend <- 13
-    }
-    if( grepl("Refugia", mapName ) ) {
-      minLegend <- 0
-      maxLegend <- 19
-    }
-    if( grepl("speciesRichness", mapName ) ) {
-      minLegend <- 1
-      maxLegend <- 20
-    }
-    if( grepl("speciesExchangeRatio", mapName ) ) {
-      minLegend <- 0
-      maxLegend <- 1
-    }
-    if( grepl("PerBaselineRichness", mapName ) ) {
-      minLegend <- 0
-      maxLegend <- 1
-    }
+    
   }
   
   nColors <- 7
@@ -271,7 +259,8 @@ mappingParallel <- foreach(m = 1:length(files) ) %dopar% {
   plot1 <- mainGlobalMapEqual +
   geom_sf(data = hexagons, aes(fill=value), colour ="black", size = 0.05) + # round signif
   scale_colour_gradientn(colours = myColors, breaks= colorBreaks, aesthetics = "fill", labels=signif(colorBreaks, digits = 3), limits=c(minLegend,maxLegend) ) +
-    geom_sf(data = bb,fill=NA, colour = "white" , linetype='solid', size= 3 ) +
+  geom_polygon(data = worldMap, aes(x = long, y = lat, group = group), fill=ifelse(themeWorldMap == "dark","#575757","#CDCDCD"), colour = "#575757" , size=0 ) +
+  geom_sf(data = bb,fill=NA, colour = "white" , linetype='solid', size= 3 ) +
     theme(legend.position="bottom",
           legend.margin=margin(0,0,0,0),
           legend.key.height= unit(0.25, 'cm'),
@@ -281,15 +270,8 @@ mappingParallel <- foreach(m = 1:length(files) ) %dopar% {
   print(plot1)
   dev.off()
   
-  return(autoLegendDF)
-  
 }
 
-stopCluster(cl); rm(cl)
-closeAllConnections()
-gc(reset=TRUE)
-
-autoLegendValues <- do.call(rbind,mappingParallel)
 autoLegendValues
 
 ## ------------------------------------------------------------------------------
@@ -304,7 +286,7 @@ files <- files[!grepl("Changes",files)]
 files <- files[!grepl("Uncertainty",files)] 
 files <- files[grepl("speciesRichness",files)] 
 
-maskIntertidal <- raster("Dependencies/Data/Rasters/coastLineRes005.tif")
+# maskIntertidal <- raster("Dependencies/Data/Rasters/coastLineRes005.tif")
 
 maskDistribution <- calc(stack(sapply(files, function(x) { loadRData( x ) } )), sum)
 maskDistribution[maskDistribution > 0] <- 1
@@ -318,49 +300,51 @@ files <- files[grepl("Changes",files)]
 filesNames <- filesNames[grepl("Changes",filesNames)]; filesNames
 
 autoLegend <- FALSE
+autoLegendValues <- data.frame()
 
 for( m in 1:length(files) ) {
   
   rasterMap <- loadRData( files[m] )
   mapName <- gsub(".RData","",filesNames[m])
-  #rasterMap <- raster::mask(rasterMap,maskIntertidal)
   
+  if( exists("maskIntertidal")) { rasterMap <- raster::mask(rasterMap,maskIntertidal) }
+
   rasterMap[intersect(Which(is.na(maskDistribution), cells=TRUE) ,Which(!is.na(rasterMap), cells=TRUE))] <- NA
   
   resolutionH3 <- 3
   rasterMapDF <- data.frame(xyFromCell(rasterMap, Which( !is.na(rasterMap) , cells=T)),val=rasterMap[Which( !is.na(rasterMap) , cells=T)])
+  rasterMapDF <- rasterMapDF[which(rasterMapDF$val != 0),]
+  
+  cl <- makeCluster( detectCores() / 2 )
+  clusterExport(cl, c("resolutionH3","rasterMapDF") )
+  hexAddress <- parApply(cl, data.frame(rasterMapDF), 1, function(x) { h3js::h3_geo_to_h3(x[[2]], x[[1]], res = resolutionH3) } )
+  stopCluster(cl) 
 
-  rasterMapDF <- data.frame(rasterMapDF,hex=apply(rasterMapDF[,1:2],1,function(x) { h3js::h3_geo_to_h3(x[[2]], x[[1]], res = resolutionH3) } ))
-  rasterMapDF <- data.frame(hex=unique(rasterMapDF$hex),val=sapply(unique(rasterMapDF$hex),function(x) { mean(rasterMapDF[rasterMapDF$hex == x , "val"],na.rm=T) } ))
+  rasterMapDF <- data.frame(rasterMapDF,hex=hexAddress)
+  
+  cl <- makeCluster( detectCores() / 2 )
+  clusterExport(cl, c("resolutionH3","rasterMapDF") )
+  hexAddressHexagon <- parLapply(cl, unique(rasterMapDF$hex), function(x) { mean(rasterMapDF[rasterMapDF$hex == x , "val"],na.rm=T) } )
+  stopCluster(cl) 
+  closeAllConnections()
+  
+  rasterMapDF <- data.frame(hex=unique(rasterMapDF$hex),val=unlist(hexAddressHexagon))
   rasterMapDF.polygons <- h3jsr::cell_to_polygon(input =rasterMapDF$hex, simple = FALSE)
   rasterMapDF.polygons$hex <- as.character(rasterMapDF$hex)
   rasterMapDF.polygons$value <- as.numeric(as.character(rasterMapDF$val))
   rasterMapDF.polygons <- correctDateLineMap(rasterMapDF.polygons)
   
-  minLegend <- min(rasterMapDF.polygons$value)
-  maxLegend <- max(rasterMapDF.polygons$value)
+  minLegend <- min(rasterMapDF.polygons$value, na.rm=T)
+  maxLegend <- max(rasterMapDF.polygons$value, na.rm=T)
+  autoLegendValues <- rbind(autoLegendValues,data.frame(mapName=mapName,minLegend=minLegend,maxLegend=maxLegend))
   
   if ( ! autoLegend ) {
     
-    minLegend <- -15
-    maxLegend <- 12
+    minLegend <- -40
+    maxLegend <- 45
     
   }
 
-  plot2 <- mainGlobalMap +
-
-    geom_sf(data = rasterMapDF.polygons, aes(fill=value), colour ="black", size = 0.05) +
-    scale_colour_gradient2(low = "#450751",mid = "white",high = "#135107",midpoint = 0,space = "Lab",na.value = "grey50",guide = "colourbar", aesthetics = "fill", limits=c(minLegend,maxLegend) ) + 
-    
-    theme(legend.position="bottom",
-          legend.margin=margin(0,0,0,0),
-          legend.key.height= unit(0.25, 'cm'),
-          legend.key.width= unit(0.75, 'cm')) + theme(legend.title=element_blank(), legend.box.background = element_blank())
-
-  pdf(file=gsub(".RData",".pdf",files[m]),width=12,useDingbats=FALSE)
-  print(plot2)
-  dev.off()
-  
   # ---------
   
   hexagons <- st_transform(rasterMapDF.polygons, projection)
@@ -370,22 +354,21 @@ for( m in 1:length(files) ) {
   hexagons <- st_as_sf(hexagons)
   
   plot1 <- mainGlobalMapEqual +
-    
     geom_sf(data = hexagons, aes(fill=value), colour ="black", size = 0.05) +
     scale_colour_gradient2(low = "#450751",mid = "white",high = "#135107",midpoint = 0,space = "Lab",na.value = "grey50",guide = "colourbar", aesthetics = "fill", limits=c(minLegend,maxLegend) ) + 
-    
+    geom_polygon(data = worldMap, aes(x = long, y = lat, group = group), fill=ifelse(themeWorldMap == "dark","#575757","#CDCDCD"), colour = "#575757" , size=0.1 ) +
     geom_sf(data = bb,fill=NA, colour = "white" , linetype='solid', size= 3 ) +
     theme(legend.position="bottom",
           legend.margin=margin(0,0,0,0),
           legend.key.height= unit(0.25, 'cm'),
           legend.key.width= unit(0.75, 'cm')) + theme(legend.title=element_blank(), legend.box.background = element_blank())
   
-  pdf(file=gsub(".RData","Equal.pdf",files[m]),width=12,useDingbats=FALSE)
+  pdf(file=gsub(".RData",".pdf",files[m]),width=12,useDingbats=FALSE)
   print(plot1)
   dev.off()
   
   # Class based colors
-  hexagons$categories <- as.factor(cut(hexagons$value, breaks = c(-15,-10,-5,-0.1,0.1,4,8,12), labels = c(1,2,3,4,5,6,7)))
+  hexagons$categories <- as.factor(cut(hexagons$value, breaks = c(-45,-30,-15,-0.1,0.1,15,30,45), labels = c(1,2,3,4,5,6,7)))
   
   library(RColorBrewer)
   myColors <- rev(c("#164B0B","#3D982A","#7FF567","#FFFFFF","#D679E9","#9833AC","#4E0E5B"))
@@ -394,17 +377,20 @@ for( m in 1:length(files) ) {
   plot1 <- mainGlobalMapEqual +
     geom_sf(data = hexagons, aes(fill=categories), colour ="black", size = 0.05) +
     scale_color_manual(values = myColors, aesthetics="fill", na.value = "grey50") +
+    geom_polygon(data = worldMap, aes(x = long, y = lat, group = group), fill=ifelse(themeWorldMap == "dark","#575757","#CDCDCD"), colour = "#575757" , size=0.1 ) +
     geom_sf(data = bb,fill=NA, colour = "white" , linetype='solid', size= 3 ) +
     theme(legend.position="bottom",
           legend.margin=margin(0,0,0,0),
           legend.key.height= unit(0.25, 'cm'),
           legend.key.width= unit(0.75, 'cm')) + theme(legend.title=element_blank(), legend.box.background = element_blank())
   
-  pdf(file=gsub(".RData","EqualClasses.pdf",files[m]),width=12,useDingbats=FALSE)
+  pdf(file=gsub(".RData","Classes.pdf",files[m]),width=12,useDingbats=FALSE)
   print(plot1)
   dev.off()
   
 }
+
+autoLegendValues
 
 ## ------------------------------------------------------------------------------
 ## ------------------------------------------------------------------------------

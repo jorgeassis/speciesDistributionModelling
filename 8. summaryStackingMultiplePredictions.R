@@ -56,27 +56,28 @@ if( resultsName == "Global" ) {
 
 if( resultsName != "Global" ) {
   
-  if(class(polygonPath) == "character") { polygon <- shapefile(polygonPath) }
+  polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
   
   if( ! is.null(polygonFeature) ) { 
     
-    polygonFeatureNames <- polygon@data[which(names(polygon@data) == polygonFeature)][,polygonFeature] 
-    polygon <- gUnaryUnion(polygon, id = polygonFeatureNames, checkValidity=2L)
-    polygonFeatureNames <- sapply(1:length(polygon), function(x) slot(slot(polygon, "polygons")[[x]],"ID") )
-    polygon$names <- polygonFeatureNames
+    if( ! polygonFeature %in% names(polygon@data) & "regionName" %in% names(polygon@data) ) {
+      names(polygon)[which(names(polygon) == "regionName" )] <- polygonFeature
+    }
     
+    polygon <- as_Spatial(st_make_valid(st_as_sf(polygon)))
+
   }
   
-  resultsDF <- as.data.frame(matrix(NA, ncol=(length(layersToCalcNames)*2)+2,nrow=length(unique(polygonFeatureNames))))
+  resultsDF <- data.frame(matrix(NA, ncol=(length(layersToCalcNames)*2)+2,nrow=nrow(polygon)))
   colnames(resultsDF) <- c("Region","Baseline",paste0(layersToCalcNames,"Area"),paste0(layersToCalcNames,"AreaChange"))
-  resultsDF[,1] <- unique(polygonFeatureNames)
+  resultsDF[,1] <- as.data.frame(polygon[,polygonFeature])[,1]
+  polygonFeatureNames <- as.data.frame(polygon[,polygonFeature])[,1]
   
 }
 
 ## ------------
 
 baselineAreas <- extract(presentDayLayerArea,polygon, small=TRUE)
-
 for( i in 1:length(baselineAreas) ) { resultsDF[i,2] <- sum(baselineAreas[[i]],na.rm=T) }
 
 ## ------------
@@ -122,13 +123,17 @@ for( i in 1:length(layersToCalc) ) {
 resultsDF[resultsDF == -Inf] <- NA
 resultsDF[resultsDF == Inf] <- NA
 
+if( resultsName == "EEZOceans" ) {
+  
+  polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+  resultsDF <- data.frame(oceanBasin=polygon$name,  EEZ=polygon$EEZ, resultsDF)
+  
+}
+
 if( resultsName == "MarineEcoRegion" ) {
   
-  polygon <- shapefile(polygonPath)
-  
-  resultsDF <- data.frame(realmRegion=polygon$REALM[match(resultsDF$Region,polygon$ECOREGION)], 
-                          provinceRegion=polygon$PROVINCE[match(resultsDF$Region,polygon$ECOREGION)],
-                          resultsDF)
+  polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+  resultsDF <- data.frame(realmRegion=polygon$REALM[match(resultsDF$Region,polygon$ECOREGION)], provinceRegion=polygon$PROVINCE[match(resultsDF$Region,polygon$ECOREGION)], resultsDF)
   
 }
 
@@ -185,21 +190,22 @@ if( resultsName == "Global" ) {
 
 if( resultsName != "Global" ) {
   
-  if(class(polygonPath) == "character") { polygon <- shapefile(polygonPath) }
+   polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
   
-  if( ! is.null(polygonFeature) ) { 
-    
-    polygonFeatureNames <- polygon@data[which(names(polygon@data) == polygonFeature)][,polygonFeature] 
-    polygon <- gUnaryUnion(polygon, id = polygonFeatureNames, checkValidity=2L)
-    polygonFeatureNames <- sapply(1:length(polygon), function(x) slot(slot(polygon, "polygons")[[x]],"ID") )
-    polygon$names <- polygonFeatureNames
-    
-  }
-  
-  resultsDF <- as.data.frame(matrix(NA, ncol=(length(layersToCalcNames)*2)+2,nrow=length(unique(polygonFeatureNames))))
-  colnames(resultsDF) <- c("Region","Baseline",paste0(layersToCalcNames,"Area"),paste0(layersToCalcNames,"ProportionBaseline"))
-  resultsDF[,1] <- unique(polygonFeatureNames)
-  
+   if( ! is.null(polygonFeature) ) { 
+     
+     if( ! polygonFeature %in% names(polygon@data) & "regionName" %in% names(polygon@data) ) {
+       names(polygon)[which(names(polygon) == "regionName" )] <- polygonFeature
+     }
+     
+     polygon <- as_Spatial(st_make_valid(st_as_sf(polygon)))
+     
+   }
+   
+   resultsDF <- as.data.frame(matrix(NA, ncol=(length(layersToCalcNames)*2)+2,nrow=nrow(polygon)))
+   colnames(resultsDF) <- c("Region","Baseline",paste0(layersToCalcNames,"Area"),paste0(layersToCalcNames,"ProportionBaseline"))
+   resultsDF[,1] <- as.data.frame(polygon[,polygonFeature])[,1]
+
 }
 
 ## ------------
@@ -248,16 +254,20 @@ for( i in 1:length(layersToCalc) ) {
   
 }
 
-resultsDF[resultsDF == -Inf] <- NA
-resultsDF[resultsDF == Inf] <- NA
+# resultsDF[resultsDF == -Inf] <- NA
+# resultsDF[resultsDF == Inf] <- NA
+
+if( resultsName == "EEZOceans" ) {
+  
+  polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+  resultsDF <- data.frame(oceanBasin=polygon$name,  EEZ=polygon$EEZ, resultsDF)
+  
+}
 
 if( resultsName == "MarineEcoRegion" ) {
   
-  polygon <- shapefile(polygonPath)
-  
-  resultsDF <- data.frame(realmRegion=polygon$REALM[match(resultsDF$Region,polygon$ECOREGION)], 
-                          provinceRegion=polygon$PROVINCE[match(resultsDF$Region,polygon$ECOREGION)],
-                          resultsDF)
+  polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+  resultsDF <- data.frame(realmRegion=polygon$REALM[match(resultsDF$Region,polygon$ECOREGION)], provinceRegion=polygon$PROVINCE[match(resultsDF$Region,polygon$ECOREGION)], resultsDF)
   
 }
 

@@ -37,40 +37,47 @@ for( algorithmType in algorithmsSP ) {
 ## ----------------------
 ## Performance
 
-algorithmsSP <- (c(algorithms,"ensemble"))[ sapply(c(algorithms,"ensemble"), function(x) { length(list.files(paste0(dataDirectory,"/SummaryModels/"), pattern=paste0(x,"Performance"))) > 0 } )]
+algorithmsSP <- (c(algorithms,"ensemble"))
 performanceDF <- data.frame(name=species)
 
 for( algorithmType in algorithmsSP ) {
-  performance.i <- list.files(paste0(dataDirectory,"/SummaryModels/"), pattern=paste0(algorithmType,"Performance.RData"), full.names = TRUE)
-  performance.i <- loadRData(paste0(dataDirectory,"/SummaryModels/",algorithmType,"Performance.RData"))
-  colnames(performance.i) <- paste0(colnames(performance.i),".",algorithmType)
-  performanceDF <- cbind(performanceDF,performance.i)
+  
+  if( algorithmType != "ensemble" ) {
+    
+    performance.i <- list.files(paste0(dataDirectory,"/Models/"), pattern=paste0(algorithmType), full.names = TRUE)
+    performance.i <- performance.i[which(!grepl("reduced",performance.i))]
+    performance.i <- loadRData(performance.i)
+    performanceCV <- performance.i$performanceCV[-1]
+    performanceCV.sd <- performance.i$performanceCV.sd[-1]
+    performance <- performance.i$performance[-1]
+
+    performance.i <- c(interleave(performanceCV.sd,performanceCV),unlist(performance))
+    names(performance.i) <- c(interleave(paste0("sdCV.",names(performanceCV),".",algorithmType),paste0("meanCV.",names(performanceCV.sd),".",algorithmType)),paste0(names(performance),".",algorithmType))
+    
+    performanceDF <- cbind(performanceDF,t(data.frame(performance.i)))
+    
+  }
+  
+  if( algorithmType == "ensemble" ) {
+    
+    performance.i <- list.files(paste0(dataDirectory,"/SummaryModels/"), pattern=paste0(algorithmType,"Performance.RData"), full.names = TRUE)
+    performance.i <- loadRData(paste0(dataDirectory,"/SummaryModels/",algorithmType,"Performance.RData"))
+    performance.i <- performance.i[-1]
+    colnames(performance.i) <- paste0("",names(performance.i),".","Ensemble")
+    performanceDF <- cbind(performanceDF,performance.i)
+    
+  }
+
 }
 row.names(performanceDF) <- NULL
 
 ## ----
 
 if( "ensemblePerformanceReachable.RData" %in% list.files(paste0(dataDirectory,"/SummaryModels/") ) ) {
-  performance.r <- loadRData(paste0(dataDirectory,"/SummaryModels/ensemblePerformanceReachable.RData"))[,-c(1)]
-  names(performance.r) <- paste0(names(performance.r),".ensembleReachab")
+  performance.r <- loadRData(paste0(dataDirectory,"/SummaryModels/ensemblePerformanceReachable.RData"))[,-1]
+  names(performance.r) <- paste0(names(performance.r),".EnsembleReachable")
   performanceDF <- cbind(performanceDF,performance.r)
 }
-
-## ----
-
-algorithmsSP <- (c(algorithms,"ensemble"))[ sapply(c(algorithms,"ensemble"), function(x) { length(list.files(paste0(dataDirectory,"/Models/"), pattern=paste0(x,".RData"))) > 0 } )]
-performanceDF.i <- data.frame(name=species)
-
-for( algorithmType in algorithmsSP ) {
-  performance.i <- list.files(paste0(dataDirectory,"/Models/"), pattern=paste0(algorithmType,".RData"), full.names = TRUE)
-  performance.i <- performance.i[which(!grepl("reduced",performance.i))]
-  performance.i <- loadRData(performance.i)$performance
-  colnames(performance.i) <- paste0(colnames(performance.i),".",algorithmType)
-  performanceDF.i <- cbind(performanceDF.i,performance.i)
-}
-row.names(performanceDF.i) <- NULL
-
-performanceDF <- cbind(performanceDF.i,performanceDF)
 
 ## ----------------------
 ## Tipping Points

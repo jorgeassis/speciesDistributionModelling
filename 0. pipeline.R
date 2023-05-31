@@ -27,8 +27,10 @@ source(mainConfigFile)
 
 ## ---------
 
-dataRecords <- loadRData(dataRecordsFile)
-#dataRecords <- dataRecords[,c("acceptedname","decimalLongitude","decimalLatitude")]
+# dataRecords <- loadRData(dataRecordsFile)
+# dataRecords <- dataRecords[,c("acceptedname","decimalLongitude","decimalLatitude")]
+
+dataRecords <- read.csv(dataRecordsFile, header=T)
 dataRecords <- dataRecords[complete.cases(dataRecords),]
 colnames(dataRecords) <- c("speciesName","Lon","Lat")
 speciesList <- sort(unique(dataRecords$speciesName))
@@ -138,7 +140,7 @@ gc(reset=TRUE)
 ## ------------------------------------------------------------------
 ## Predict species
 
-overwrite <- FALSE
+overwrite <- TRUE
 speciesList <- sort(unique(dataRecords$speciesName))
 speciesToPredict <- character(0)
 for( species in list.files(mainResultsDirectory) ) {
@@ -274,6 +276,16 @@ length(speciesPredicted)
 
 ## ----------
 
+removeSpeciesPredicted <- c("Saccharina japonica","Undaria pinnatifida")
+
+if( !is.null(removeSpeciesPredicted)) {
+  removeSpeciesPredicted <- unlist(sapply( removeSpeciesPredicted, function(x) which(grepl(x,speciesPredicted)) ))
+  speciesPredicted <- unique(speciesPredicted[-removeSpeciesPredicted])
+}
+length(speciesPredicted)
+
+## ----------
+
 relativeContributionAll <- data.frame()
 performanceAll <- data.frame()
 tippingPointsAll <- data.frame()
@@ -325,12 +337,15 @@ rangeShiftsEstimatesAll[ rangeShiftsEstimatesAll == Inf] <- NA
 speciesDiscardedNames <- speciesPredicted[which(performanceAll$boyce.Ensemble < 0 )]
 speciesPredicted <- speciesPredicted[which(performanceAll$boyce.Ensemble >= 0 )]
 
+# speciesDiscardedNames <- speciesPredicted[which(performanceAll$boyce.Ensemble < 0 )]
+# speciesPredicted <- speciesPredicted[which(performanceAll$boyce.Ensemble >= 0 )]
+
 write.csv(data.frame(species=speciesDiscardedNames), file=paste0(stackResultsFolder,"/speciesDiscarded.csv"), row.names = FALSE)
 write.csv(data.frame(species=speciesPredicted), file=paste0(stackResultsFolder,"/speciesPredictedList.csv"), row.names = FALSE)
 
 ## ---------
 
-taxaCrossChecker <- "Cnidaria" # "Alismatales"
+taxaCrossChecker <- "Phaeophyceae" # "Alismatales"
 source("Dependencies/getWormsInfo.R")
 write.csv(speciesListWorms, file=paste0(stackResultsFolder,"/speciesListWorms.csv"), row.names = FALSE)
 
@@ -360,9 +375,9 @@ resultsName <- "MarineEcoRegion" # MarineEcoRegion MarineRealm
 polygonPath <- "Dependencies/Data/Shapefiles/marine_ecoregions.shp"
 polygonFeature <- "ECOREGION" # ECOREGION PROVINCE REALM
 
-resultsName <- "EEZ"
-polygon <- load("Dependences/Data/Shapefiles/EEZGlobal.RData")
-polygonFeature <- "EEZ"
+resultsName <- "EEZOceans" # EEZ EEZOceans
+polygonPath <-"Dependencies/Data/Shapefiles/EEZOceans.shp" # EEZ.shp EEZOceans.shp
+polygonFeature <- "name" # EEZ EEZOceans
 
 source("6. summaryPresenceInsideRegion.R")
 
@@ -398,21 +413,20 @@ if( ! is.null(bathymetryDataLayerHR) ) {
 
 ## ---------------
 
-resultsName <- "Global" # MarineRealm MarineEcoRegion Global
-polygon <- NULL
-polygonFeature <- NULL # NULL ECOREGION PROVINCE REALM
+resultsName <- "Global"
+polygonFeature <- "Global"
 
-resultsName <- "MarineRealm" # MarineRealm MarineEcoRegion
+resultsName <- "MarineEcoRegion" # MarineRealm MarineEcoRegion
 polygonPath <- "Dependencies/Data/Shapefiles/marine_ecoregions.shp"
-polygonFeature <- "REALM" # NULL ECOREGION PROVINCE REALM
+polygonFeature <- "ECOREGION" # NULL ECOREGION PROVINCE REALM
 
 resultsName <- "EEZOceans" # EEZ EEZOceans
 polygonPath <-"Dependencies/Data/Shapefiles/EEZOceans.shp" # EEZ.shp EEZOceans.shp
-polygonFeature <- "EEZOceans" # EEZ EEZOceans
+polygonFeature <- "regionName" # EEZ EEZOceans
 
 source("8. summaryStackingMultiplePredictions.R")
 
-## -----------------------------------------
++## -----------------------------------------
 ## -----------------------------------------
 # Summary stack predictions Per latitude
 

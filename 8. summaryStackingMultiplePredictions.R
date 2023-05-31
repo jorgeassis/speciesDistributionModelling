@@ -43,6 +43,8 @@ presentDayLayer[presentDayLayer == 0] <- NA
 presentDayLayer[presentDayLayer > 1] <- 1
 presentDayLayerArea <- presentDayLayer * areaLayer
 
+## ------------
+
 if( resultsName == "Global" ) { 
   
   resultsDF <- as.data.frame(matrix(NA, ncol=(length(layersToCalcNames)*2)+2,nrow=1))
@@ -51,34 +53,53 @@ if( resultsName == "Global" ) {
   polygonFeatureNames <- "Global"
   polygon <- extent(areaLayer)
   polygon <- as(polygon, 'SpatialPolygons')  
-  
+  polygon$regionName <- "Global"
+
 }
 
 if( resultsName != "Global" ) {
   
   polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
   
-  if( ! is.null(polygonFeature) ) { 
-    
-    if( ! polygonFeature %in% names(polygon@data) & "regionName" %in% names(polygon@data) ) {
-      names(polygon)[which(names(polygon) == "regionName" )] <- polygonFeature
-    }
-    
-    polygon <- as_Spatial(st_make_valid(st_as_sf(polygon)))
-
-  }
+  if( is.null(polygonFeature) ) { stop("Missing polygonFeature") }
+  if( ! polygonFeature %in% names(polygon@data) ) { stop(paste0(polygonFeature," not in polygon")) }
   
-  resultsDF <- data.frame(matrix(NA, ncol=(length(layersToCalcNames)*2)+2,nrow=nrow(polygon)))
+  names(polygon)[which(names(polygon) == polygonFeature )] <- "regionName"
+  polygon <- as_Spatial(st_make_valid(st_as_sf(polygon)))
+  polygonFeatureNames <- unique(as.data.frame(polygon[,"regionName"])[,1])
+  
+  resultsDF <- data.frame(matrix(NA, ncol=(length(layersToCalcNames)*2)+2,nrow=length(polygonFeatureNames)))
   colnames(resultsDF) <- c("Region","Baseline",paste0(layersToCalcNames,"Area"),paste0(layersToCalcNames,"AreaChange"))
-  resultsDF[,1] <- as.data.frame(polygon[,polygonFeature])[,1]
-  polygonFeatureNames <- as.data.frame(polygon[,polygonFeature])[,1]
+  resultsDF[,1] <- polygonFeatureNames
+  resultsDFBk <- resultsDF
   
 }
 
+resultsDFBk <- resultsDF
+
 ## ------------
 
-baselineAreas <- extract(presentDayLayerArea,polygon, small=TRUE)
-for( i in 1:length(baselineAreas) ) { resultsDF[i,2] <- sum(baselineAreas[[i]],na.rm=T) }
+rasterLayer <- presentDayLayerArea
+rasterLayer[rasterLayer == 0] <- NA
+rasterLayerBinomial <- rasterLayer
+rasterLayerBinomial[rasterLayerBinomial > 1] <- 1
+rasterLayerArea <- rasterLayerBinomial * areaLayer
+
+for( p.i in 1:length(polygonFeatureNames) ){
+  
+  polygon.pi <- polygon[which(as.data.frame(polygon[,"regionName"]) == polygonFeatureNames[p.i]),]
+  
+  rasterLayer.pi <- crop(rasterLayer,polygon.pi)
+  rasterLayer.pi <- raster::mask(rasterLayer.pi,polygon.pi)
+  rasterLayerArea.pi <- crop(rasterLayerArea,rasterLayer.pi)
+  rasterLayerArea.pi <- raster::mask(rasterLayerArea.pi,rasterLayer.pi)
+  
+  rasterLayerVals <- unlist(getValues(rasterLayer.pi))
+  rasterLayerAreaVals <- unlist(getValues(rasterLayerArea.pi))
+  
+  if( ! is.null(rasterLayerAreaVals) ) {  resultsDF[p.i,2] <- sum( rasterLayerAreaVals ,na.rm=T ) }
+  
+}
 
 ## ------------
 
@@ -100,7 +121,7 @@ for( i in 1:length(layersToCalc) ) {
     cat("## --------------------------------- \n")
     cat("\n")
     
-    polygon.pi <- polygon[p.i,]
+    polygon.pi <- polygon[which(as.data.frame(polygon[,"regionName"]) == polygonFeatureNames[p.i]),]
     
     rasterLayer.pi <- crop(rasterLayer,polygon.pi)
     rasterLayer.pi <- raster::mask(rasterLayer.pi,polygon.pi)
@@ -120,21 +141,19 @@ for( i in 1:length(layersToCalc) ) {
   
 }
 
+## ------------
+
 resultsDF[resultsDF == -Inf] <- NA
 resultsDF[resultsDF == Inf] <- NA
 
-if( resultsName == "EEZOceans" ) {
-  
-  polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
-  resultsDF <- data.frame(oceanBasin=polygon$name,  EEZ=polygon$EEZ, resultsDF)
-  
+if( resultsName == "MarineEcoRegion" ) {
+  polygonNames <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+  resultsDF <- data.frame(Realm=polygonNames$REALM,  Province=polygonNames$PROVINCE, resultsDF)
 }
 
-if( resultsName == "MarineEcoRegion" ) {
-  
-  polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
-  resultsDF <- data.frame(realmRegion=polygon$REALM[match(resultsDF$Region,polygon$ECOREGION)], provinceRegion=polygon$PROVINCE[match(resultsDF$Region,polygon$ECOREGION)], resultsDF)
-  
+if( resultsName == "EEZOceans" ) {
+  polygonNames <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+  resultsDF <- data.frame(oceanBasin=polygonNames$name,  EEZ=polygonNames$EEZ, resultsDF)
 }
 
 names(resultsDF) <- gsub("Reachable","",names(resultsDF))
@@ -177,42 +196,33 @@ presentDayLayer[presentDayLayer == 0] <- NA
 presentDayLayer[presentDayLayer > 1] <- 1
 presentDayLayerArea <- presentDayLayer * areaLayer
 
-if( resultsName == "Global" ) { 
-  
-  resultsDF <- as.data.frame(matrix(NA, ncol=(length(layersToCalcNames)*2)+2,nrow=1))
-  colnames(resultsDF) <- c("Region","Baseline",paste0(layersToCalcNames,"Area"),paste0(layersToCalcNames,"ProportionBaseline"))
-  resultsDF[,1] <- "Global"
-  polygonFeatureNames <- "Global"
-  polygon <- extent(areaLayer)
-  polygon <- as(polygon, 'SpatialPolygons')  
-  
-}
+## ------------
 
-if( resultsName != "Global" ) {
-  
-   polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
-  
-   if( ! is.null(polygonFeature) ) { 
-     
-     if( ! polygonFeature %in% names(polygon@data) & "regionName" %in% names(polygon@data) ) {
-       names(polygon)[which(names(polygon) == "regionName" )] <- polygonFeature
-     }
-     
-     polygon <- as_Spatial(st_make_valid(st_as_sf(polygon)))
-     
-   }
-   
-   resultsDF <- as.data.frame(matrix(NA, ncol=(length(layersToCalcNames)*2)+2,nrow=nrow(polygon)))
-   colnames(resultsDF) <- c("Region","Baseline",paste0(layersToCalcNames,"Area"),paste0(layersToCalcNames,"ProportionBaseline"))
-   resultsDF[,1] <- as.data.frame(polygon[,polygonFeature])[,1]
-
-}
+resultsDF <- resultsDFBk 
 
 ## ------------
 
-baselineAreas <- extract(presentDayLayerArea,polygon, small=TRUE)
+rasterLayer <- presentDayLayerArea
+rasterLayer[rasterLayer == 0] <- NA
+rasterLayerBinomial <- rasterLayer
+rasterLayerBinomial[rasterLayerBinomial > 1] <- 1
+rasterLayerArea <- rasterLayerBinomial * areaLayer
 
-for( i in 1:length(baselineAreas) ) { resultsDF[i,2] <- sum(baselineAreas[[i]],na.rm=T) }
+for( p.i in 1:length(polygonFeatureNames) ){
+  
+  polygon.pi <- polygon[which(as.data.frame(polygon[,"regionName"]) == polygonFeatureNames[p.i]),]
+  
+  rasterLayer.pi <- crop(rasterLayer,polygon.pi)
+  rasterLayer.pi <- raster::mask(rasterLayer.pi,polygon.pi)
+  rasterLayerArea.pi <- crop(rasterLayerArea,rasterLayer.pi)
+  rasterLayerArea.pi <- raster::mask(rasterLayerArea.pi,rasterLayer.pi)
+  
+  rasterLayerVals <- unlist(getValues(rasterLayer.pi))
+  rasterLayerAreaVals <- unlist(getValues(rasterLayerArea.pi))
+  
+  if( ! is.null(rasterLayerAreaVals) ) {  resultsDF[p.i,2] <- sum( rasterLayerAreaVals ,na.rm=T ) }
+  
+}
 
 ## ------------
 
@@ -234,7 +244,7 @@ for( i in 1:length(layersToCalc) ) {
     cat("## --------------------------------- \n")
     cat("\n")
     
-    polygon.pi <- polygon[p.i,]
+    polygon.pi <- polygon[which(as.data.frame(polygon[,"regionName"]) == polygonFeatureNames[p.i]),]
     
     rasterLayer.pi <- crop(rasterLayer,polygon.pi)
     rasterLayer.pi <- raster::mask(rasterLayer.pi,polygon.pi)
@@ -254,21 +264,17 @@ for( i in 1:length(layersToCalc) ) {
   
 }
 
-# resultsDF[resultsDF == -Inf] <- NA
-# resultsDF[resultsDF == Inf] <- NA
-
-if( resultsName == "EEZOceans" ) {
-  
-  polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
-  resultsDF <- data.frame(oceanBasin=polygon$name,  EEZ=polygon$EEZ, resultsDF)
-  
-}
+resultsDF[resultsDF == -Inf] <- NA
+resultsDF[resultsDF == Inf] <- NA
 
 if( resultsName == "MarineEcoRegion" ) {
-  
-  polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
-  resultsDF <- data.frame(realmRegion=polygon$REALM[match(resultsDF$Region,polygon$ECOREGION)], provinceRegion=polygon$PROVINCE[match(resultsDF$Region,polygon$ECOREGION)], resultsDF)
-  
+  polygonNames <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+  resultsDF <- data.frame(Realm=polygonNames$REALM,  Province=polygonNames$PROVINCE, resultsDF)
+}
+
+if( resultsName == "EEZOceans" ) {
+  polygonNames <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+  resultsDF <- data.frame(oceanBasin=polygonNames$name,  EEZ=polygonNames$EEZ, resultsDF)
 }
 
 names(resultsDF) <- gsub("Reachable","",names(resultsDF))

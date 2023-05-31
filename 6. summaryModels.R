@@ -103,7 +103,11 @@ for( algorithmType in algorithmsSP ) {
 ## ----------------------
 ## Depth Range
 
-depthRangeShifts <- loadRData(paste0(dataDirectory,"/SummaryModels/depthDataPredicted.RData"))
+depthRangeShifts.1 <- loadRData(paste0(dataDirectory,"/SummaryModels/depthDataPredicted.RData"))
+depthRangeShifts.2 <- loadRData(paste0(dataDirectory,"/SummaryModels/depthDataPredictedLossGainRefugia.RData"))
+depthRangeShifts.2 <- depthRangeShifts.2[-4,-1]
+
+depthRangeShifts <- cbind(depthRangeShifts.1,depthRangeShifts.2)
 depthRange <- numeric(0)
 
 for( c in 2:(ncol(depthRangeShifts))) {

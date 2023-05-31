@@ -15,13 +15,13 @@
 
 nCores <- 15
 
-mainResultsDirectory <- "/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/Results/"
-stackResultsFolder <- "/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/ResultsStacked/"
+mainResultsDirectory <- "/media/Hammerhead/Data/Distribution Models/Global distribution of marine forests/Results/"
+stackResultsFolder <- "/media/Hammerhead/Data/Distribution Models/Global distribution of marine forests/ResultsStacked/"
 
-climateLayersDirectory <-"/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/Data/Climate/Baseline/"
+climateLayersDirectory <-"/media/Hammerhead/Data/Distribution Models/Global distribution of marine forests/Data/Climate/Baseline/"
 dataLayersFileType <- "tif"
 
-dataRecordsFile <- "/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/Data/Records/finalDatasetSeagrassesReduced.RData"
+dataRecordsFile <- "/media/Hammerhead/Data/Distribution Models/Global distribution of marine forests/Data/Records/finalDatasetMFReduced.csv"
 dataRecordsNames <- c("Lon","Lat")
 
 dataLayers <- c("Nitrate BenthicMin Ltmin","OceanTemperature BenthicMin Ltmax","OceanTemperature BenthicMin Ltmin","Salinity BenthicMin Ltmin","SeaIceCover Surface Ltmin","CoastalExposure")
@@ -33,12 +33,12 @@ monotonicity
 ## -------------------
 
 bathymetryDataLayer <- "Dependencies/Data/Rasters/BathymetryDepthMinRes005.tif"
-bathymetryDataLayerHR <- "../GEBCO Bathymetry Global.tif" # NULL
+bathymetryDataLayerHR <- "../../Dropbox/Dropbox/Data/Spatial information/Rasters/GEBCO Bathymetry Global.tif" # NULL
 intertidal <- "Dependencies/Data/Rasters/coastLineRes005.tif" # NULL
 
-depthTraits <- NULL # "/media/Hammerhead/Data/Distribution Models/Global distribution of seagrasses/Data/Records/databaseCWCTraits.csv"
+depthTraits <- NULL # "/media/Hammerhead/Data/Distribution Models/Global distribution of marine forests/Data/Records/databaseCWCTraits.csv"
 minDepth <- 0 # NULL
-maxDepth <- 20 # NULL
+maxDepth <- 30 # NULL
 maxDepthBuffer <- 0
 minDepthBuffer <- 0
 
@@ -56,7 +56,7 @@ relocateType <- "distance" # distance / nonDistance
 relocateSpeciesDistance <- 100
 relocateSpeciesDepth <- TRUE # only if relocateType == "distance"
 
-minOccurrenceRecords <- 3
+minOccurrenceRecords <- 5
 
 # -------------------------------------------------
 # Cross-validation

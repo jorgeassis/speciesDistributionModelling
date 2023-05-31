@@ -36,10 +36,10 @@ shape <- baselinePrediction
 shape[shape == 1] <- 0
 
 for( scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
-
+  
   scenarioPredictionFile <- gsub("Baseline",scenario,baselinePredictionFile)
   scenarioPrediction <- loadRData(scenarioPredictionFile)
-
+  
   rangeShifts <- Gain <- Loss <- Refugia <- shape
   
   if( ! 1 %in% getValues(scenarioPrediction) ) { 
@@ -59,10 +59,22 @@ for( scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
     rangeShifts <- data.frame(LatShift = 0, distanceCentroidShift=0, distanceToRefugiaMean=0, distanceToRefugiaMax=0, distanceRangeGainMean=0, distanceRangeGainMax=0)
     save( rangeShifts , file=paste0( resultsDirectory, "/SummaryModels/rangeShiftEstimates",ifelse( "Reachable" %in% exportType , "Reachable" , "unConstrained" ),scenario,".RData"))
     
+    # ---
+    
+    depthData <- data.frame(variable = c("Min","Mean","Max","q05","q95"))
+    
+    for( layer in c("Loss","Gain","Refugia")) {
+      depthData.i <- data.frame(value = c(NA,NA, NA , NA, NA) )
+      names(depthData.i) <- paste0("Pred",layer,scenario)
+      depthData <- cbind(depthData,depthData.i)
+    }
+    
+    save(depthData,file=paste0(resultsDirectory,"/SummaryModels/","depthDataPredictedLossGainRefugia.RData"))
+    
     next
     
   }
-
+  
   rangeShifts[Which(baselinePrediction == 0 , cells=T )] <- NA
   rangeShifts[Which(scenarioPrediction == 1 & baselinePrediction == 0 , cells=T )] <- 1
   rangeShifts[Which(scenarioPrediction == 0 & baselinePrediction == 1 , cells=T )] <- -1
@@ -71,7 +83,7 @@ for( scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
   Gain[Which(scenarioPrediction == 1 & baselinePrediction == 0 , cells=T )] <- 1
   Loss[Which(scenarioPrediction == 0 & baselinePrediction == 1 , cells=T )] <- 1
   Refugia[Which(scenarioPrediction == 1 & baselinePrediction == 1 , cells=T )] <- 1
-
+  
   save( Gain , file = gsub("ensemble","ensembleGain",scenarioPredictionFile), compress=TRUE, compression_level=6)
   save( Loss , file = gsub("ensemble","ensembleLoss",scenarioPredictionFile), compress=TRUE, compression_level=6)
   save( Refugia , file = gsub("ensemble","ensembleRefugia",scenarioPredictionFile) , compress=TRUE, compression_level=6)
@@ -81,11 +93,11 @@ for( scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
   # Range shift estimates
   
   rangeShifts <- data.frame(LatShift = abs(mean(range(xyFromCell(Gain,Which(Gain == 1, cells=T))[,2]))) - abs(mean(range(xyFromCell(Refugia,Which(Refugia == 1, cells=T))[,2]))))
-
+  
   rangeShifts$distanceCentroidShift <- spDists( matrix( c(mean((range(xyFromCell(baselinePrediction,Which(baselinePrediction == 1, cells=T))[,1]))),mean((range(xyFromCell(baselinePrediction,Which(baselinePrediction == 1, cells=T))[,2])))), nrow=1),
                                                 matrix( c(mean((range(xyFromCell(scenarioPrediction,Which(scenarioPrediction == 1, cells=T))[,1]))),mean((range(xyFromCell(scenarioPrediction,Which(scenarioPrediction == 1, cells=T))[,2])))), nrow=1),
                                                 longlat = TRUE )
-
+  
   
   distRefugia <- distExpansion <- shape
   distRefugia[] <- NA
@@ -126,7 +138,7 @@ for( scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
   coordsGainPrediction <- xyFromCell(distExpansion,cellsGainPrediction)
   
   if( nrow(coordsBaselinePrediction) > 0 & nrow(coordsGainPrediction) > 0) {
-
+    
     distanceCalc <- get.knnx( coordsBaselinePrediction , matrix(coordsGainPrediction, ncol=2), k= 1 , algorithm="kd_tree" )
     distanceCalc <- sapply(1:nrow(coordsGainPrediction), function(x) { d2km(distanceCalc$nn.dist[x], base.latitude = coordsGainPrediction[x,2]) })
     distExpansion[cellsGainPrediction] <- distanceCalc
@@ -139,5 +151,26 @@ for( scenario in scenariosToPredict[scenariosToPredict != "Baseline"] ) {
   rangeShifts$distanceRangeGainMax <- cellStats(distExpansion,max)
   
   save( rangeShifts , file=paste0( resultsDirectory, "/SummaryModels/rangeShiftEstimates",ifelse( "Reachable" %in% exportType , "Reachable" , "unConstrained" ),scenario,".RData"))
+  
+  # Depth shifts of refugia and loss regions
+  
+  if( length(bathymetryDataLayer) == 1 ) { bathymetry <- raster(bathymetryDataLayer) }
+  if( length(bathymetryDataLayer) >= 2 ) { bathymetry <- calc(stack(bathymetryDataLayer),mean) }
+  
+  if( scenario == scenariosToPredict[scenariosToPredict != "Baseline"] [1] ) { depthData <- data.frame(variable = c("Min","Mean","Max","q05","q95")) }
+  
+  for( layer in c("Loss","Gain","Refugia")) {
+    
+    layer.Calc <- get(layer)
+    layer.Calc[layer.Calc == 0] <- NA
+    layer.Calc <- abs(getValues(layer.Calc * bathymetry))
+    depthData.i <- data.frame(value = c(min(layer.Calc,na.rm=T),mean(layer.Calc,na.rm=T), max(layer.Calc,na.rm=T) , quantile(layer.Calc,na.rm=T, probs=0.05), quantile(layer.Calc,na.rm=T, probs=0.95)) )
+    names(depthData.i) <- paste0("Pred",layer,scenario)
+    depthData <- cbind(depthData,depthData.i)
+    
+  }
+  
+  depthData[depthData == Inf | depthData == -Inf | is.na(depthData)] <- NA
+  save(depthData,file=paste0(resultsDirectory,"/SummaryModels/","depthDataPredictedLossGainRefugia.RData"))
   
 }

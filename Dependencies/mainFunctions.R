@@ -212,6 +212,10 @@ predictedPerformance <- function(prediction,modelData,cvIndex,type="regular") {
   
   observed <- modelData@pa
   predicted <- raster::extract(prediction,modelData@coords)
+  
+  observed <- observed[which(!is.na(predicted))]
+  predicted <- predicted[which(!is.na(predicted))]
+  
   predicted.accuracy <- modelPerformance(observed,predicted,cvIndex)
   predicted.accuracy.threshold <- predicted.accuracy$threshold
   predicted.accuracy.boyce <- predicted.accuracy$boyce
@@ -221,6 +225,11 @@ predictedPerformance <- function(prediction,modelData,cvIndex,type="regular") {
     predicted.accuracy <- modelPerformance(observed,predicted,cvIndex)
     predicted.accuracy$threshold <- predicted.accuracy.threshold
     predicted.accuracy$boyce <- predicted.accuracy.boyce
+  }
+  
+  if( is.na(predicted.accuracy$auc) ) {
+    observed <- modelData@pa
+    predicted.accuracy <- modelPerformance(observed,predicted,"auc")
   }
   
   return(predicted.accuracy)

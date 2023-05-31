@@ -4,16 +4,14 @@
 
 if( ! dir.exists(paste0(stackResultsFolder,"/Summary/")) ) { dir.create(paste0(stackResultsFolder,"/Summary/"), recursive = TRUE) }
 
-if(class(polygonPath) == "character") { polygon <- shapefile(polygonPath) }
+polygon <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
 
-if( ! is.null(polygonFeature) ) { 
-  
-  polygonFeatureNames <- polygon@data[which(names(polygon@data) == polygonFeature)][,polygonFeature] 
-  polygon <- gUnaryUnion(polygon, id = polygonFeatureNames, checkValidity=2L)
-  polygonFeatureNames <- sapply(1:length(polygon), function(x) slot(slot(polygon, "polygons")[[x]],"ID") )
-  polygon$names <- polygonFeatureNames
-  
-}
+if( is.null(polygonFeature) ) { stop("Missing polygonFeature") }
+if( ! polygonFeature %in% names(polygon@data) ) { stop(paste0(polygonFeature," not in polygon")) }
+
+names(polygon)[which(names(polygon) == polygonFeature )] <- "regionName"
+polygon <- as_Spatial(st_make_valid(st_as_sf(polygon)))
+polygonFeatureNames <- unique(as.data.frame(polygon[,"regionName"])[,1])
 
 for(scenario in scenariosToPredict ) {
 
@@ -39,8 +37,8 @@ for(scenario in scenariosToPredict ) {
   
   if(length(sFiles) > length(speciesPredicted)) { stop("Error :: 332")}
   
-  resMatrix <- matrix(0,nrow=nrow(polygon),ncol=length(sFiles))
-  rownames(resMatrix) <- polygon$names
+  resMatrix <- matrix(0,nrow=length(polygonFeatureNames),ncol=length(sFiles))
+  rownames(resMatrix) <- polygonFeatureNames
   colnames(resMatrix) <- speciesPredicted
 
   for( i in 1:length(sFiles)) {
@@ -53,17 +51,13 @@ for(scenario in scenariosToPredict ) {
     
     spRaster <- loadRData(sFiles[i])
 
-    for( j in 1:nrow(polygon) ) {
+    for( j in 1:length(polygonFeatureNames) ) {
       
-      polygon.j <- polygon[j,]
+      polygon.j <- polygon[which(polygon$regionName == polygonFeatureNames[j]),]
       spRaster.j <- crop(spRaster,polygon.j)
       spRaster.j <- mask(spRaster.j,polygon.j)
       
-      if( cellStats(spRaster.j,max,na.rm=T) != 0 ) { 
-        
-        resMatrix[j,i] <- 1
-        
-      }
+      if( cellStats(spRaster.j,max,na.rm=T) != 0 ) { resMatrix[j,i] <- 1 }
     
     }
     
@@ -71,19 +65,34 @@ for(scenario in scenariosToPredict ) {
   
   ## --------
   
-  resMatrix <- data.frame(region=polygon$names,resMatrix)
+  resMatrix <- data.frame(region=polygonFeatureNames,resMatrix)
+  rownames(resMatrix) <- NULL
+  
+  if( resultsName == "MarineEcoRegion" ) {
+    polygonNames <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+    resMatrix <- data.frame(Realm=polygonNames$REALM,  Province=polygonNames$PROVINCE, resMatrix)
+  }
+  
+  if( resultsName == "EEZOceans" ) {
+    polygonNames <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+    resMatrix <- data.frame(oceanBasin=polygonNames$name,  EEZ=polygonNames$EEZ, resMatrix)
+  }
+  
   write.csv(resMatrix, file=paste0(stackResultsFolder,"/Summary","/summarySpeciesIn",resultsName,scenario,typePrediction,".csv"), row.names = FALSE)
   
 }
 
 ## --------
 
-summaryPresenceInsideBaseline <- read.csv(paste0(stackResultsFolder,"/Summary","/summarySpeciesIn",resultsName,"Baseline",typePrediction,".csv"), header=TRUE)[,-1]
+summaryPresenceInsideBaseline <- read.csv(paste0(stackResultsFolder,"/Summary","/summarySpeciesIn",resultsName,"Baseline",typePrediction,".csv"), header=TRUE)
+summaryPresenceInsideBaseline <- summaryPresenceInsideBaseline[,sapply(1:ncol(summaryPresenceInsideBaseline),function(x) is.numeric(summaryPresenceInsideBaseline[1,x]))]
 
 for( scenario in scenariosToPredict[ scenariosToPredict != "Baseline"] ) {
   
-  summaryPresenceInsideScenario <- read.csv(paste0(stackResultsFolder,"/Summary","/summarySpeciesIn",resultsName,scenario,typePrediction,".csv"), header=TRUE)[,-1]
-  resMatrix <- data.frame(region=polygon$names,baseline=apply(summaryPresenceInsideBaseline,1,sum),loss=NA,gain=NA, refugia=NA)
+  summaryPresenceInsideScenario <- read.csv(paste0(stackResultsFolder,"/Summary","/summarySpeciesIn",resultsName,scenario,typePrediction,".csv"), header=TRUE)
+  summaryPresenceInsideScenario <- summaryPresenceInsideScenario[,sapply(1:ncol(summaryPresenceInsideScenario),function(x) is.numeric(summaryPresenceInsideScenario[1,x]))]
+  
+  resMatrix <- data.frame(baseline=apply(summaryPresenceInsideBaseline,1,sum),loss=NA,gain=NA, refugia=NA)
   
   for( region in 1:nrow(summaryPresenceInsideScenario))   {
     
@@ -94,6 +103,18 @@ for( scenario in scenariosToPredict[ scenariosToPredict != "Baseline"] ) {
     resMatrix[region,"gain"] <- sum(resultRegionDiff == 1)
     resMatrix[region,"refugia"] <- sum(resultRegionSum == 2)
     
+  }
+  
+  resMatrix <- data.frame(region=polygonFeatureNames,resMatrix)
+  
+  if( resultsName == "MarineEcoRegion" ) {
+    polygonNames <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+    resMatrix <- data.frame(Realm=polygonNames$REALM,  Province=polygonNames$PROVINCE, resMatrix)
+  }
+  
+  if( resultsName == "EEZOceans" ) {
+    polygonNames <- rgdal::readOGR(dsn = DescTools::SplitPath(polygonPath)$dirname, layer = DescTools::SplitPath(polygonPath)$filename)
+    resMatrix <- data.frame(oceanBasin=polygonNames$name,  EEZ=polygonNames$EEZ, resMatrix)
   }
   
   write.csv(resMatrix, file=paste0(stackResultsFolder,"/Summary","/summarySpeciesIn",resultsName,scenario,typePrediction,"Changes.csv"), row.names = FALSE)

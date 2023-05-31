@@ -3,6 +3,7 @@
 
 closeAllConnections()
 gc(reset=TRUE)
+library(gridExtra)
 
 # -----------------------------
 # Boxplot performance
@@ -23,13 +24,13 @@ data <- rbind(
   data.frame( Group= "Cross validation", Index = "AUC" , Algorithm= "XgBoost" , Value = data$meanCV.auc.XGBOOST ),
   data.frame( Group= "Cross validation", Index = "Boyce" , Algorithm= "XgBoost" , Value = rescale(data$meanCV.boyce.XGBOOST, to = c(0, 1), range = c(-1, 1)) ),
   
-  data.frame( Group= "Final prediction", Index = "Sensitivity" , Algorithm= "zEnsemble" , Value = data$sensitivity.Ensemble ),
-  data.frame( Group= "Final prediction", Index = "AUC" , Algorithm= "zEnsemble" , Value = data$auc.Ensemble ),
-  data.frame( Group= "Final prediction", Index = "Boyce" , Algorithm= "zEnsemble" , Value = rescale(data$boyce.Ensemble, to = c(0, 1), range = c(-1, 1)) ),
+  data.frame( Group= "Final prediction", Index = "Sensitivity" , Algorithm= "zEnsemb." , Value = data$sensitivity.Ensemble ),
+  data.frame( Group= "Final prediction", Index = "AUC" , Algorithm= "zEnsemb." , Value = data$auc.Ensemble ),
+  data.frame( Group= "Final prediction", Index = "Boyce" , Algorithm= "zEnsemb." , Value = rescale(data$boyce.Ensemble, to = c(0, 1), range = c(-1, 1)) ),
 
-  data.frame( Group= "Final prediction", Index = "Sensitivity" , Algorithm= "zEnsembleReach" , Value = data$sensitivity.EnsembleReachab ),
-  data.frame( Group= "Final prediction", Index = "AUC" , Algorithm= "zEnsembleReach" , Value = data$auc.EnsembleReachab ),
-  data.frame( Group= "Final prediction", Index = "Boyce" , Algorithm= "zEnsembleReach" , Value = rescale(data$boyce.EnsembleReachab, to = c(0, 1), range = c(-1, 1)) ),
+  data.frame( Group= "Final prediction", Index = "Sensitivity" , Algorithm= "zEnsemb. [Disp.]" , Value = data$sensitivity.EnsembleReachab ),
+  data.frame( Group= "Final prediction", Index = "AUC" , Algorithm= "zEnsemb. [Disp.]" , Value = data$auc.EnsembleReachab ),
+  data.frame( Group= "Final prediction", Index = "Boyce" , Algorithm= "zEnsemb. [Disp.]" , Value = rescale(data$boyce.EnsembleReachab, to = c(0, 1), range = c(-1, 1)) ),
 
   data.frame( Group= "Final prediction", Index = "Sensitivity" , Algorithm= "BRT" , Value = data$sensitivity.BRT ),
   data.frame( Group= "Final prediction", Index = "AUC" , Algorithm= "BRT" , Value = data$auc.BRT ),
@@ -45,19 +46,45 @@ data <- rbind(
 
 data <- data[complete.cases(data),]
 
-a <- ggplot(data, aes(x=Value, y=Algorithm, fill=Index)) + 
-      theme_bw() + 
-      theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
-      geom_boxplot(lwd=0.25, outlier.size=0.4, outlier.colour="#949494") +
+a <- ggplot(data[data$Group =="Cross validation",], aes(x=Value, y=Algorithm, fill=Index)) + 
+      theme_bw() +
+
+      geom_boxplot( lwd=0.25, outlier.size=0.4, outlier.colour="#414141") +
       coord_flip() +
-      scale_fill_manual(name=NULL, values=c("#FFE600","#F29A42","#E67B73")) +
-      xlab("Model performace") +
-      facet_grid(~Group, scales = "free_x", space = "free_x", switch = "x") + 
-      theme(axis.title.x = element_blank()) +
-      theme(strip.placement = "outside") +
+      scale_fill_manual(name=NULL, values=c("#ffffe0","#e3a8aa","#f26885")) + # #FFD700","#FFB14E","#FA8775 #', ', '#', '#ffffe0
+  scale_x_continuous(breaks=c(0,0.25,0.5,0.75,1), labels=c("0","0.25","0.5","0.75","1"), limits=c(0, 1)) +
+  xlab("Model performance") +
+  ylab("Cross validation models") +
+  # facet_grid(~Group, scales = "free_x", space = "free_x", switch = "x") + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme(strip.placement = "outside") +
       theme(strip.background =element_rect(fill="white",colour = "white", size = 1)) +
-      theme(legend.position="none") 
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0))) +
+theme(axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0))) +
+  theme(axis.ticks = element_blank()) +
+  theme(legend.position = c(0.2, 0.15))
+
 a
+
+
+b <- ggplot(data[data$Group =="Final prediction",], aes(x=Value, y=Algorithm, fill=Index)) + 
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  geom_boxplot(lwd=0.25, outlier.size=0.4, outlier.colour="#414141") +
+  coord_flip() +
+  scale_fill_manual(name=NULL, values=c("#ffffe0","#e3a8aa","#f26885")) + # #FFD700","#FFB14E","#FA8775 #', ', '#', '#ffffe0
+  # facet_grid(~Group, scales = "free_x", space = "free_x", switch = "x") + 
+  scale_x_continuous(breaks=c(0,0.25,0.5,0.75,1), labels=c("0","0.25","0.5","0.75","1"), limits=c(0, 1)) +
+  theme(axis.title.y = element_blank()) +
+  theme(strip.placement = "outside") +
+  theme(strip.background =element_rect(fill="white",colour = "white", size = 1)) +
+  theme(legend.position="none") + 
+  ylab("Predictive models") +
+  theme(axis.text.y=element_blank(), axis.ticks.y=element_blank() ) +
+  theme(axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0))) +
+  theme(axis.ticks = element_blank()) 
+
+b
 
 # Relative Contribution
 
@@ -69,19 +96,29 @@ names(data) <- gsub("\\.ensemble","",names(data))
 data <- tidyr::gather(data)
 names(data) <- c("Predictor","Contribution")
 
+data[data$Predictor == "TempMax","Predictor"] <- "Temp. Max."
+data[data$Predictor == "TempMin","Predictor"] <- "Temp. Min."
+data[data$Predictor == "seaIce","Predictor"] <- "Sea Ice"
+data[data$Predictor == "CoastalExposure","Predictor"] <- "Exposure"
+
 data$Predictor <- with(data, reorder(Predictor , -Contribution, median , na.rm=T))
 
-b <- ggplot(data, aes(x=Predictor, y=Contribution, fill=Contribution)) + 
+c <- ggplot(data, aes(x=Predictor, y=Contribution, fill=Contribution)) + 
       theme_bw() + 
       theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
-      geom_boxplot(width=0.5, fill="#DE4D43", lwd=0.25, outlier.size=0.4, outlier.colour="#949494") +
-      scale_y_continuous(limits=c(0,80), breaks=seq(0,80,20)) +
+      geom_boxplot(width=0.5, fill="#93003a", lwd=0.25, outlier.size=0.4, outlier.colour="#414141") +
+      scale_y_continuous(limits=c(0,75), breaks=c(0,5,25,50,75), labels=c("0","5","25","50","75")) +
       labs(y="Relative contribution (%)")+
-      theme(legend.position="none") + geom_hline(yintercept=5,linetype=2, size=0.25)
+  xlab("Predictor variable") +
+  
+      theme(legend.position="none") + geom_hline(yintercept=5,linetype=2, size=0.25)+
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0))) +
+  theme(axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0))) +
+  theme(axis.ticks = element_blank()) 
 
+grid.arrange(a, b, c, nrow = 1, widths=c(0.4, 0.525, 0.5))
 
-library(gridExtra)
-
-pdf(paste0(stackResultsFolder,"./performanceContributionPlot.pdf"), width=12, height=5)
-grid.arrange(a, b, nrow = 1)
+pdf(paste0(stackResultsFolder,"./performanceContributionPlot.pdf"), width=15, height=5)
+grid.arrange(a, b, c, nrow = 1, widths=c(0.4, 0.525, 0.5))
 dev.off()
+

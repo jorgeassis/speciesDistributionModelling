@@ -198,6 +198,9 @@ for(m in 1:length(files) ) {
     rasterMap <- mask(rasterMap,rasterMapPresent)
   }
   
+  scaleType <- "continuous"
+  if( grepl("ExchangeRatio", mapName ) | grepl("StandPerBaseline", mapName ) | grepl("Uncertainty", mapName ) ) { scaleType <- "binomial" }
+  
   resolutionH3 <- 3
   rasterMapDF <- data.frame(xyFromCell(rasterMap, Which( !is.na(rasterMap) , cells=T)),val=rasterMap[Which( !is.na(rasterMap) , cells=T)])
   
@@ -229,26 +232,50 @@ for(m in 1:length(files) ) {
   minLegend <- min(rasterMapDF.polygons$value)
   maxLegend <- max(rasterMapDF.polygons$value)
   
+  # Round data to the nearest even integer
+  minLegend <- 2 * round(minLegend / 2)
+  maxLegend <- 2 * round(maxLegend / 2)
+  
   autoLegendValues <- rbind(autoLegendValues,data.frame(mapName=mapName,minLegend=minLegend,maxLegend=maxLegend))
   
   if( ! autoLegend ) {
     
-    minLegend <- round(min(autoLegendValues[which(grepl(mapName,autoLegendValues$mapName)),2:3]))
-    maxLegend <- round(max(autoLegendValues[which(grepl(mapName,autoLegendValues$mapName)),2:3]))
+    autoLegendValues <- read.csv(paste0(stackResultsFolder,"/Maps/","LegendValues_1.csv"))[,-1]
     
-    if( grepl("Uncertainty", mapName ) ) {
-      minLegend <- 0
-      maxLegend <- 1
+    autoLegendValues.i <- autoLegendValues
+    
+    if( grepl("rangeGain",mapName) ) { autoLegendValues.i <- autoLegendValues[grepl("rangeGain",autoLegendValues$mapName),] }
+    if( grepl("rangeLoss",mapName) ) { autoLegendValues.i <- autoLegendValues[grepl("rangeLoss",autoLegendValues$mapName),] }
+    if( grepl("rangeRefugia",mapName) ) { autoLegendValues.i <- autoLegendValues[grepl("rangeRefugia",autoLegendValues$mapName),] }
+    if( grepl("speciesExchangeRatio",mapName) ) { autoLegendValues.i <- autoLegendValues[grepl("speciesExchangeRatio",autoLegendValues$mapName),] }
+    if( grepl("speciesRichness",mapName) ) { autoLegendValues.i <- autoLegendValues[grepl("speciesRichness",autoLegendValues$mapName),] }
+    
+    if( grepl("Uncertainty",mapName) ) { autoLegendValues.i <- autoLegendValues.i[grepl("Uncertainty",autoLegendValues.i$mapName),] }
+    if( ! grepl("Uncertainty",mapName) ) { autoLegendValues.i <- autoLegendValues.i[! grepl("Uncertainty",autoLegendValues.i$mapName),] }
+    
+    if( grepl("StandPerBaselineRichness",mapName) ) { autoLegendValues.i <- autoLegendValues.i[grepl("StandPerBaselineRichness",autoLegendValues.i$mapName),] }
+    if( ! grepl("StandPerBaselineRichness",mapName) ) { autoLegendValues.i <- autoLegendValues.i[! grepl("StandPerBaselineRichness",autoLegendValues.i$mapName),] }
+    
+    minLegend <- min(autoLegendValues.i[,2:3])
+    maxLegend <- max(autoLegendValues.i[,2:3])
+    
+    # Round data to the nearest even integer
+    
+    if( ! grepl("Uncertainty",mapName) ) { 
+      minLegend <- 2 * round(minLegend / 2)
+      maxLegend <- 2 * round(maxLegend / 2)
     }
     
   }
   
-  nColors <- 7
-  colorBreaks <- seq( min(rasterMapDF.polygons$value),max(rasterMapDF.polygons$value), length.out=nColors)
-  colorBreaks[1] <- min(rasterMapDF.polygons$value)
-  colorBreaks[nColors] <- max(rasterMapDF.polygons$value)
+  if(maxLegend == 0) { maxLegend <- 1 }
   
-  myColors <- c("#E4FAFF","#E8EF15","#ec7a06","#e31515", "#450751") # Blue Yellow Red Purple
+  nColors <- 7
+  colorBreaks <- seq( minLegend , maxLegend, length.out=nColors)
+  colorBreaks[1] <- minLegend
+  colorBreaks[nColors] <- maxLegend
+  
+  myColors <- c("#ffffff","#A4BFD1","#F0DA15", "#E47723","#93003a","#530655") # Blue Yellow Red Purple
   myColors <- colorRampPalette(myColors)(nColors)
   
   #----------------------
@@ -259,12 +286,18 @@ for(m in 1:length(files) ) {
   hexagons <- crop(hexagons, as(bb, "Spatial"))
   hexagons <- st_as_sf(hexagons)
   
+  if( scaleType == "continuous" ) { colorBreaksLegend <- round(colorBreaks) }
+  if( scaleType == "binomial" ) { colorBreaksLegend <- round(colorBreaks, digits=2) }
+  
   plot1 <- mainGlobalMapEqual +
     
     { if( themeWorldPosition == "below") geom_polygon(data = worldMap, aes(x = long, y = lat, group = group), fill=ifelse(themeWorldMap == "dark","#575757","#CDCDCD"), colour = "#CDCDCD" , size=0.1 ) } +
     
     geom_sf(data = hexagons, aes(fill=value), colour ="black", size = 0.05) + # round signif
-    scale_colour_gradientn(colours = myColors, breaks= colorBreaks, aesthetics = "fill", labels=signif(colorBreaks, digits = 3), limits=c(minLegend,maxLegend) ) +
+    scale_colour_gradientn(colours = myColors, 
+                           breaks= colorBreaks[c(1,3,5,7)], aesthetics = "fill", 
+                           labels=colorBreaksLegend[c(1,3,5,7)], 
+                           limits=c(minLegend,maxLegend) ) +
     
     { if( themeWorldPosition == "above") geom_polygon(data = worldMap, aes(x = long, y = lat, group = group), fill=ifelse(themeWorldMap == "dark","#575757","#CDCDCD"), colour = "#CDCDCD" , size=0.1 ) } +
     
@@ -349,10 +382,15 @@ for( m in 1:length(files) ) {
   
   if ( ! autoLegend ) {
     
-    minLegend <- -19
-    maxLegend <- 24
-    
+    autoLegendValues <- read.csv(paste0(stackResultsFolder,"/","LegendValues_2.csv"))[,-1]
+    minLegend <- min(autoLegendValues[,2:3])
+    maxLegend <- max(autoLegendValues[,2:3])
+
   }
+  
+  # Round data to the nearest even integer
+  minLegend <- 2 * round(minLegend / 2)
+  maxLegend <- 2 * round(maxLegend / 2)
   
   # ---------
   
@@ -367,8 +405,11 @@ for( m in 1:length(files) ) {
     { if( themeWorldPosition == "below") geom_polygon(data = worldMap, aes(x = long, y = lat, group = group), fill=ifelse(themeWorldMap == "dark","#575757","#CDCDCD"), colour = "#CDCDCD" , size=0.1 ) } +
     
     geom_sf(data = hexagons, aes(fill=value), colour ="black", size = 0.05) +
-    scale_colour_gradient2(low = "#450751",mid = "white",high = "#135107",midpoint = 0,space = "Lab",na.value = "grey50",guide = "colourbar", aesthetics = "fill", limits=c(minLegend,maxLegend) ) + 
-    
+    scale_colour_gradient2(low = "#800033",mid = "white",high = "#078050",midpoint = 0, 
+                           space = "Lab",na.value = "grey50", guide = "colourbar", aesthetics = "fill", 
+                           limits=c(minLegend,maxLegend) ,
+                           breaks=c(minLegend,minLegend / 2,0,maxLegend/2,maxLegend),labels=c(minLegend,minLegend / 2,0,maxLegend/2,maxLegend) ) + 
+  
     { if( themeWorldPosition == "above") geom_polygon(data = worldMap, aes(x = long, y = lat, group = group), fill=ifelse(themeWorldMap == "dark","#575757","#CDCDCD"), colour = "#CDCDCD" , size=0.1 ) } +
     
     geom_sf(data = bb,fill=NA, colour = "white" , linetype='solid', size= 3 ) +
@@ -382,10 +423,10 @@ for( m in 1:length(files) ) {
   dev.off()
   
   # Class based colors
-  hexagons$categories <- as.factor(cut(hexagons$value, breaks = c(-20,-12.5,-7.5,-0.49,0.49,8,16,24), labels = c(1,2,3,4,5,6,7)))
+  hexagons$categories <- as.factor(cut(hexagons$value, breaks = c(seq(minLegend,0,length.out=4)[-4],-0.49,0.49,seq(0,maxLegend,length.out=4)[-1]), labels = c( paste0(round(seq(minLegend,0,length.out=4)[-4]), " to " ,round(seq(minLegend,0,length.out=4)[-1])) , "0" , paste0(round(seq(0,maxLegend,length.out=4)[-4])," to ",round(seq(0,maxLegend,length.out=4)[-1])) )  ) )
   
   library(RColorBrewer)
-  myColors <- rev(c("#164B0B","#3D982A","#7FF567","#FFFFFF","#D679E9","#9833AC","#4E0E5B"))
+  myColors <- rev(c("#078050","#098252","#6fd49e","#FFFFFF","#ffb6ce","#d15775","#800033"))
   names(myColors) <- levels(hexagons$categories)
   
   plot1 <- mainGlobalMapEqual +
@@ -401,7 +442,8 @@ for( m in 1:length(files) ) {
     theme(legend.position="bottom",
           legend.margin=margin(0,0,0,0),
           legend.key.height= unit(0.25, 'cm'),
-          legend.key.width= unit(0.75, 'cm')) + theme(legend.title=element_blank(), legend.box.background = element_blank())
+          legend.key.width= unit(0.75, 'cm')) + theme(legend.title=element_blank(), legend.box.background = element_blank()) +
+    guides(fill = guide_legend(nrow = 1))
   
   pdf(file=gsub(".RData","Classes.pdf",files[m]),width=12,useDingbats=FALSE)
   print(plot1)
